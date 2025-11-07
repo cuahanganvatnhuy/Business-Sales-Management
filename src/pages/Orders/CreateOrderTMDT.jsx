@@ -1,0 +1,850 @@
+import React, { useState, useEffect } from 'react';
+import {
+  Card,
+  Form,
+  Input,
+  Select,
+  Button,
+  DatePicker,
+  InputNumber,
+  message,
+  Spin,
+  Row,
+  Col,
+  Divider,
+  Space,
+  Upload
+} from 'antd';
+import {
+  DeleteOutlined,
+  ShoppingCartOutlined,
+  CheckOutlined,
+  SaveOutlined,
+  FilePdfOutlined,
+  FileExcelOutlined,
+  EditOutlined,
+  UploadOutlined,
+  InboxOutlined,
+  ShopOutlined,
+  PlusOutlined
+} from '@ant-design/icons';
+import { database } from '../../services/firebase.service';
+import { ref, onValue, push, set } from 'firebase/database';
+import { formatCurrency } from '../../utils/format';
+import dayjs from 'dayjs';
+import './Orders.css';
+
+const { Option } = Select;
+
+const CreateOrderTMDT = () => {
+  const [mainForm] = Form.useForm();
+  const [loading, setLoading] = useState(false);
+  const [sellingProducts, setSellingProducts] = useState([]);
+  
+  // Order info
+  const [selectedPlatform, setSelectedPlatform] = useState('');
+  const [selectedDate, setSelectedDate] = useState(dayjs());
+  const [orderCount, setOrderCount] = useState('');
+  
+  // Order forms
+  const [orderForms, setOrderForms] = useState([]);
+  const [showForms, setShowForms] = useState(false);
+  
+  // Creation method
+  const [creationMethod, setCreationMethod] = useState('manual'); // manual, pdf, excel
+  const [uploadedFile, setUploadedFile] = useState(null);
+
+  // Platforms list
+  const platforms = [
+    { value: 'shopee', label: 'Shopee', color: '#EE4D2D' },
+    { value: 'lazada', label: 'Lazada', color: '#0F156D' },
+    { value: 'tiktok', label: 'TikTok Shop', color: '#000000' },
+    { value: 'sendo', label: 'Sendo', color: '#ED1B24' },
+    { value: 'tiki', label: 'Tiki', color: '#1A94FF' },
+    { value: 'facebook', label: 'Facebook Shop', color: '#1877F2' },
+    { value: 'zalo', label: 'Zalo Shop', color: '#0068FF' },
+    { value: 'other', label: 'Khác', color: '#999999' }
+  ];
+
+  // Load selling products (status = active only)
+  useEffect(() => {
+    const sellingProductsRef = ref(database, 'sellingProducts');
+    const unsubscribe = onValue(sellingProductsRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const productsList = Object.entries(data)
+          .filter(([id, product]) => product.status === 'active')
+          .map(([id, product]) => ({
+            id,
+            ...product
+          }));
+        setSellingProducts(productsList);
+        console.log('✅ Loaded active selling products:', productsList.length);
+      } else {
+        setSellingProducts([]);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Generate order forms - Mỗi đơn hàng chứa nhiều sản phẩm
+  const handleGenerateForms = () => {
+    if (!selectedPlatform) {
+      message.warning('Vui lòng chọn sàn TMĐT!');
+      return;
+    }
+
+    const count = parseInt(orderCount);
+    if (!count || count < 1 || count > 1000) {
+      message.warning('Vui lòng nhập số lượng đơn hàng (1-1000)!');
+      return;
+    }
+
+    // Generate forms - Mỗi form là 1 đơn hàng với items array
+    const forms = [];
+    for (let i = 1; i <= count; i++) {
+      forms.push({
+        id: i,
+        items: [] // Mỗi đơn có nhiều sản phẩm
+      });
+    }
+
+    setOrderForms(forms);
+    setShowForms(true);
+    message.success(`Đã tạo ${count} đơn hàng!`);
+  };
+
+  // Add product to order
+  const handleAddProduct = (orderId) => {
+    setOrderForms(prevForms =>
+      prevForms.map(form => {
+        if (form.id === orderId) {
+          return {
+            ...form,
+            items: [
+              ...form.items,
+              {
+                key: Date.now(),
+                productId: '',
+                productName: '',
+                sku: '',
+                importPrice: 0,
+                sellingPrice: 0,
+                quantity: 1,
+                subtotal: 0,
+                profit: 0
+              }
+            ]
+          };
+        }
+        return form;
+      })
+    );
+  };
+
+  // Handle product selection for a specific item in an order
+  const handleProductChange = (orderId, itemKey, productId) => {
+    const product = sellingProducts.find(p => p.id === productId);
+    if (product) {
+      setOrderForms(prevForms =>
+        prevForms.map(form => {
+          if (form.id === orderId) {
+            return {
+              ...form,
+              items: form.items.map(item => {
+                if (item.key === itemKey) {
+                  const quantity = item.quantity || 1;
+                  const subtotal = product.sellingPrice * quantity;
+                  const profit = (product.sellingPrice - product.importPrice) * quantity;
+                  
+                  return {
+                    ...item,
+                    productId: product.id,
+                    productName: product.productName,
+                    sku: product.sku,
+                    importPrice: product.importPrice,
+                    sellingPrice: product.sellingPrice,
+                    quantity,
+                    subtotal,
+                    profit
+                  };
+                }
+                return item;
+              })
+            };
+          }
+          return form;
+        })
+      );
+    }
+  };
+
+  // Handle quantity change for a specific item
+  const handleQuantityChange = (orderId, itemKey, quantity) => {
+    setOrderForms(prevForms =>
+      prevForms.map(form => {
+        if (form.id === orderId) {
+          return {
+            ...form,
+            items: form.items.map(item => {
+              if (item.key === itemKey) {
+                const subtotal = item.sellingPrice * quantity;
+                const profit = (item.sellingPrice - item.importPrice) * quantity;
+                return { ...item, quantity, subtotal, profit };
+              }
+              return item;
+            })
+          };
+        }
+        return form;
+      })
+    );
+  };
+
+  // Remove product from order
+  const handleRemoveProduct = (orderId, itemKey) => {
+    setOrderForms(prevForms =>
+      prevForms.map(form => {
+        if (form.id === orderId) {
+          return {
+            ...form,
+            items: form.items.filter(item => item.key !== itemKey)
+          };
+        }
+        return form;
+      })
+    );
+  };
+
+  // Delete a form
+  const handleDeleteForm = (formId) => {
+    setOrderForms(prevForms => prevForms.filter(form => form.id !== formId));
+    message.info('Đã xóa form đơn hàng!');
+  };
+
+  // Calculate totals for a specific order
+  const calculateOrderTotals = (order) => {
+    const totalAmount = order.items.reduce((sum, item) => sum + (item.subtotal || 0), 0);
+    const totalProfit = order.items.reduce((sum, item) => sum + (item.profit || 0), 0);
+    const totalItems = order.items.length;
+    const totalQuantity = order.items.reduce((sum, item) => sum + (item.quantity || 0), 0);
+    return { totalAmount, totalProfit, totalItems, totalQuantity };
+  };
+
+  // Calculate grand totals (all orders)
+  const calculateTotals = () => {
+    let totalAmount = 0;
+    let totalProfit = 0;
+    orderForms.forEach(form => {
+      const orderTotal = calculateOrderTotals(form);
+      totalAmount += orderTotal.totalAmount;
+      totalProfit += orderTotal.totalProfit;
+    });
+    return { totalAmount, totalProfit };
+  };
+
+  // Create all orders
+  const handleCreateAllOrders = async () => {
+    // Validation: Check mỗi đơn phải có ít nhất 1 sản phẩm
+    const emptyOrders = orderForms.filter(form => form.items.length === 0);
+    if (emptyOrders.length > 0) {
+      message.warning(`Có ${emptyOrders.length} đơn hàng chưa có sản phẩm! Vui lòng thêm sản phẩm.`);
+      return;
+    }
+
+    // Validation: Check tất cả items phải đã chọn sản phẩm
+    let hasInvalidItems = false;
+    orderForms.forEach(form => {
+      const invalidItems = form.items.filter(item => !item.productId);
+      if (invalidItems.length > 0) {
+        hasInvalidItems = true;
+      }
+    });
+
+    if (hasInvalidItems) {
+      message.warning('Vui lòng chọn sản phẩm cho tất cả các dòng!');
+      return;
+    }
+
+    const otherPlatformName = mainForm.getFieldValue('otherPlatform');
+    if (selectedPlatform === 'other' && !otherPlatformName) {
+      message.warning('Vui lòng nhập tên sàn khác!');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const ordersRef = ref(database, 'salesOrders');
+
+      // Save từng đơn hàng (mỗi đơn chứa nhiều items)
+      for (const form of orderForms) {
+        const orderTotals = calculateOrderTotals(form);
+        
+        const newOrderRef = push(ordersRef);
+        await set(newOrderRef, {
+          // Order info
+          orderDate: selectedDate.format('YYYY-MM-DD'),
+          platform: selectedPlatform,
+          otherPlatform: selectedPlatform === 'other' ? otherPlatformName : '',
+          orderType: 'ecommerce',
+          
+          // Order items (array of products)
+          items: form.items.map(item => ({
+            productId: item.productId,
+            productName: item.productName,
+            sku: item.sku,
+            importPrice: item.importPrice,
+            sellingPrice: item.sellingPrice,
+            quantity: item.quantity,
+            subtotal: item.subtotal,
+            profit: item.profit
+          })),
+          
+          // Order totals
+          totalAmount: orderTotals.totalAmount,
+          totalProfit: orderTotals.totalProfit,
+          totalItems: orderTotals.totalItems,
+          totalQuantity: orderTotals.totalQuantity,
+          
+          // Metadata
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+      }
+
+      message.success(`✅ Đã tạo ${orderForms.length} đơn hàng TMĐT thành công!`);
+      
+      // Reset
+      mainForm.resetFields();
+      setOrderCount('');
+      setOrderForms([]);
+      setShowForms(false);
+      setSelectedPlatform('');
+      setSelectedDate(dayjs());
+    } catch (error) {
+      console.error('Error creating orders:', error);
+      message.error('Lỗi tạo đơn hàng: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const { totalAmount, totalProfit } = calculateTotals();
+
+  return (
+    <Spin spinning={loading}>
+      <div className="create-order-page">
+        {/* Header */}
+        <div style={{ marginBottom: 20 }}>
+          <h2 style={{ 
+            margin: 0, 
+            fontSize: 20, 
+            fontWeight: 600, 
+            color: '#007A33',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8
+          }}>
+            + Thêm Đơn Hàng Mới
+          </h2>
+        </div>
+
+        {/* Order Type Selection */}
+        <div className="order-type-buttons">
+          <Button
+            type="primary"
+            icon={<ShoppingCartOutlined />}
+          >
+            🛒 Đơn TMĐT
+          </Button>
+          <Button
+            icon={<ShopOutlined />}
+            onClick={() => message.info('Chức năng Đơn Bán Lẻ sẽ được phát triển')}
+          >
+            🏪 Đơn Bán Lẻ
+          </Button>
+          <Button
+            icon={<InboxOutlined />}
+            onClick={() => message.info('Chức năng Đơn Bán Sỉ sẽ được phát triển')}
+          >
+            📦 Đơn Bán Sỉ
+          </Button>
+        </div>
+
+        {/* Order Info Form */}
+        <Card title={
+          <span style={{ color: '#007A33', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ 
+              width: 20, 
+              height: 20, 
+              borderRadius: '50%', 
+              background: 'white', 
+              color: '#007A33',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 12,
+              fontWeight: 'bold'
+            }}>ℹ</span>
+            Thông Tin Đơn Hàng
+          </span>
+        }>
+          <Form form={mainForm} layout="vertical">
+            {/* Method Selection Buttons - ĐẦU TIÊN */}
+            <div className="method-buttons-container">
+              <Button
+                className={`method-button ${creationMethod === 'manual' ? 'active' : ''}`}
+                icon={<EditOutlined />}
+                onClick={() => setCreationMethod('manual')}
+              >
+                ✏️ Tự Tạo Đơn
+              </Button>
+              <Button
+                className={`method-button ${creationMethod === 'pdf' ? 'active' : ''}`}
+                icon={<FilePdfOutlined />}
+                onClick={() => setCreationMethod('pdf')}
+              >
+                📄 Upload PDF TikTok
+              </Button>
+              <Button
+                className={`method-button ${creationMethod === 'excel' ? 'active' : ''}`}
+                icon={<FileExcelOutlined />}
+                onClick={() => setCreationMethod('excel')}
+              >
+                📊 Upload Excel TMĐT
+              </Button>
+            </div>
+
+            {/* Platform Selection - FULL WIDTH */}
+            <Form.Item
+              label={<span style={{ fontWeight: 600 }}>Chọn Sàn TMĐT:</span>}
+            >
+              <Select
+                placeholder="-- Chọn sàn thương mại điện tử --"
+                size="large"
+                value={selectedPlatform}
+                onChange={setSelectedPlatform}
+              >
+                {platforms.map(p => (
+                  <Option key={p.value} value={p.value}>
+                    {p.label}
+                  </Option>
+                ))}
+              </Select>
+            </Form.Item>
+
+            {selectedPlatform === 'other' && (
+              <Form.Item
+                label="Tên sàn khác:"
+                name="otherPlatform"
+                rules={[{ required: true, message: 'Vui lòng nhập tên sàn!' }]}
+              >
+                <Input placeholder="Nhập tên sàn TMĐT" size="large" />
+              </Form.Item>
+            )}
+
+            {/* Row 2 cột: Date | Quantity/Upload */}
+            <Row gutter={16}>
+              {/* Cột trái: Ngày Tạo Đơn */}
+              <Col xs={24} md={12}>
+                <Form.Item
+                  label="Ngày Tạo Đơn:"
+                  required
+                >
+                  <DatePicker
+                    style={{ width: '100%' }}
+                    format="DD/MM/YYYY"
+                    size="large"
+                    value={selectedDate}
+                    onChange={setSelectedDate}
+                  />
+                </Form.Item>
+              </Col>
+
+              {/* Cột phải: Số Lượng / Upload */}
+              <Col xs={24} md={12}>
+                {/* Manual Method */}
+                {creationMethod === 'manual' && (
+                  <Form.Item
+                    label="Số Lượng Đơn Hàng:"
+                    required
+                  >
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <InputNumber
+                        style={{ flex: 1 }}
+                        size="large"
+                        min={1}
+                        max={10000}
+                        placeholder="Nhập số lượng đơn hàng"
+                        value={orderCount}
+                        onChange={setOrderCount}
+                        onPressEnter={handleGenerateForms}
+                      />
+                      <Button
+                        type="primary"
+                        size="large"
+                        icon={<CheckOutlined />}
+                        onClick={handleGenerateForms}
+                        style={{
+                          background: 'linear-gradient(135deg, #007A33, #00632a)',
+                          borderColor: '#007A33',
+                          boxShadow: '0 2px 6px rgba(0, 122, 51, 0.3)',
+                          fontWeight: 600
+                        }}
+                      >
+                        ✓ Xác Nhận
+                      </Button>
+                    </div>
+                    <div style={{ marginTop: 6, color: '#999', fontSize: 12 }}>
+                      Nhập số lượng đơn hàng bạn muốn tạo (tối đa 10000 đơn)
+                    </div>
+                  </Form.Item>
+                )}
+
+                {/* PDF Upload Method */}
+                {creationMethod === 'pdf' && (
+                  <Form.Item label="Upload File PDF TikTok:">
+                    <Upload.Dragger
+                      accept=".pdf"
+                      maxCount={1}
+                      beforeUpload={(file) => {
+                        setUploadedFile(file);
+                        message.info(`File ${file.name} đã được chọn. Tính năng đang phát triển...`);
+                        return false;
+                      }}
+                      onRemove={() => setUploadedFile(null)}
+                    >
+                      <p className="ant-upload-drag-icon">
+                        <InboxOutlined style={{ color: '#007A33', fontSize: 32 }} />
+                      </p>
+                      <p className="ant-upload-text">Kéo thả PDF hoặc <span style={{ color: '#007A33' }}>chọn file</span></p>
+                      <p className="ant-upload-hint">Hỗ trợ nhiều file PDF cùng lúc</p>
+                    </Upload.Dragger>
+                  </Form.Item>
+                )}
+
+                {/* Excel Upload Method */}
+                {creationMethod === 'excel' && (
+                  <Form.Item label="Upload File Excel TMĐT:">
+                    <Upload.Dragger
+                      accept=".xlsx,.xls"
+                      maxCount={1}
+                      beforeUpload={(file) => {
+                        setUploadedFile(file);
+                        message.info(`File ${file.name} đã được chọn. Tính năng đang phát triển...`);
+                        return false;
+                      }}
+                      onRemove={() => setUploadedFile(null)}
+                    >
+                      <p className="ant-upload-drag-icon">
+                        <InboxOutlined style={{ color: '#52c41a', fontSize: 32 }} />
+                      </p>
+                      <p className="ant-upload-text">Kéo thả Excel hoặc <span style={{ color: '#52c41a' }}>chọn file</span></p>
+                      <p className="ant-upload-hint">
+                        Hỗ trợ file Excel (.xlsx, .xls) từ TikTok Shop, Shopee, Lazada
+                      </p>
+                    </Upload.Dragger>
+                  </Form.Item>
+                )}
+              </Col>
+            </Row>
+          </Form>
+        </Card>
+
+        {/* Order Forms */}
+        {showForms && orderForms.length > 0 && (
+          <Card
+            title={`🛒 Danh Sách Đơn Hàng (${orderForms.length} đơn)`}
+            extra={
+              <Space>
+                <span style={{ color: '#666' }}>
+                  Tổng: <strong style={{ color: '#52c41a', fontSize: 16 }}>
+                    {formatCurrency(totalAmount)} ₫
+                  </strong>
+                </span>
+                <span style={{ color: '#666' }}>
+                  Lợi nhuận: <strong style={{ color: '#1890ff', fontSize: 16 }}>
+                    {formatCurrency(totalProfit)} ₫
+                  </strong>
+                </span>
+              </Space>
+            }
+          >
+            <div className="orders-scrollable">
+              {orderForms.map((form, index) => (
+                <Card
+                  key={form.id}
+                  className="order-form-card"
+                  size="small"
+                  title={
+                    <div style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between',
+                      alignItems: 'center'
+                    }}>
+                      <span>
+                        <ShoppingCartOutlined /> Đơn Hàng Bán {form.id}
+                      </span>
+                      {orderForms.length > 1 && (
+                        <Button
+                          danger
+                          type="text"
+                          icon={<DeleteOutlined />}
+                          onClick={() => handleDeleteForm(form.id)}
+                        >
+                          Xóa
+                        </Button>
+                      )}
+                    </div>
+                  }
+                >
+                  {/* Order Items Table */}
+                  {form.items.length > 0 ? (
+                    <div>
+                      <div style={{ 
+                        marginBottom: 12,
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                      }}>
+                        <span style={{ fontSize: 13, color: '#666' }}>
+                          {form.items.length} sản phẩm
+                        </span>
+                        <Button
+                          type="dashed"
+                          size="small"
+                          icon={<PlusOutlined />}
+                          onClick={() => handleAddProduct(form.id)}
+                        >
+                          Thêm Sản Phẩm
+                        </Button>
+                      </div>
+                      
+                      {form.items.map((item, itemIndex) => (
+                        <div key={item.key} style={{ 
+                          marginBottom: 16,
+                          padding: 12,
+                          background: '#fafafa',
+                          borderRadius: 6,
+                          border: '1px solid #f0f0f0'
+                        }}>
+                          <Row gutter={[8, 8]}>
+                            <Col xs={24} md={10}>
+                              <div style={{ marginBottom: 4 }}>
+                                <label style={{ fontSize: 12, fontWeight: 600 }}>
+                                  <span style={{ color: '#ff4d4f' }}>* </span>
+                                  Sản Phẩm:
+                                </label>
+                              </div>
+                              <Select
+                                showSearch
+                                size="small"
+                                style={{ width: '100%' }}
+                                placeholder="Chọn sản phẩm"
+                                value={item.productId || undefined}
+                                onChange={(value) => handleProductChange(form.id, item.key, value)}
+                                filterOption={(input, option) =>
+                                  (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                                }
+                                options={sellingProducts.map(p => ({
+                                  value: p.id,
+                                  label: `${p.productName} (${p.sku})`
+                                }))}
+                              />
+                            </Col>
+
+                            <Col xs={8} md={3}>
+                              <div style={{ marginBottom: 4 }}>
+                                <label style={{ fontSize: 12, fontWeight: 600 }}>SKU:</label>
+                              </div>
+                              <Input
+                                size="small"
+                                value={item.sku}
+                                readOnly
+                                style={{ background: '#fff' }}
+                              />
+                            </Col>
+
+                            <Col xs={8} md={2}>
+                              <div style={{ marginBottom: 4 }}>
+                                <label style={{ fontSize: 12, fontWeight: 600 }}>SL:</label>
+                              </div>
+                              <InputNumber
+                                size="small"
+                                style={{ width: '100%' }}
+                                min={1}
+                                value={item.quantity}
+                                onChange={(value) => handleQuantityChange(form.id, item.key, value)}
+                              />
+                            </Col>
+
+                            <Col xs={8} md={3}>
+                              <div style={{ marginBottom: 4 }}>
+                                <label style={{ fontSize: 12, fontWeight: 600 }}>Giá Nhập:</label>
+                              </div>
+                              <div style={{ 
+                                fontSize: 12,
+                                padding: '4px 8px',
+                                background: '#fff',
+                                border: '1px solid #d9d9d9',
+                                borderRadius: 4
+                              }}>
+                                {item.importPrice > 0 ? formatCurrency(item.importPrice) : '-'}
+                              </div>
+                            </Col>
+
+                            <Col xs={8} md={3}>
+                              <div style={{ marginBottom: 4 }}>
+                                <label style={{ fontSize: 12, fontWeight: 600 }}>Giá Bán:</label>
+                              </div>
+                              <div style={{ 
+                                fontSize: 12,
+                                padding: '4px 8px',
+                                background: '#fff',
+                                border: '1px solid #d9d9d9',
+                                borderRadius: 4,
+                                color: '#52c41a',
+                                fontWeight: 600
+                              }}>
+                                {item.sellingPrice > 0 ? formatCurrency(item.sellingPrice) : '-'}
+                              </div>
+                            </Col>
+
+                            <Col xs={8} md={2}>
+                              <div style={{ marginBottom: 4 }}>
+                                <label style={{ fontSize: 12, fontWeight: 600 }}>L.Nhuận:</label>
+                              </div>
+                              <div style={{ 
+                                fontSize: 12,
+                                padding: '4px 8px',
+                                background: '#fff',
+                                border: '1px solid #d9d9d9',
+                                borderRadius: 4,
+                                color: item.profit > 0 ? '#52c41a' : '#ff4d4f',
+                                fontWeight: 600
+                              }}>
+                                {item.profit !== 0 ? formatCurrency(item.profit) : '-'}
+                              </div>
+                            </Col>
+
+                            <Col xs={24} md={1} style={{ display: 'flex', alignItems: 'flex-end' }}>
+                              <Button
+                                danger
+                                type="text"
+                                size="small"
+                                icon={<DeleteOutlined />}
+                                onClick={() => handleRemoveProduct(form.id, item.key)}
+                              />
+                            </Col>
+                          </Row>
+                        </div>
+                      ))}
+
+                      {/* Order Summary */}
+                      <div style={{ 
+                        marginTop: 16,
+                        padding: 12,
+                        background: '#f0f9ff',
+                        borderRadius: 6,
+                        display: 'flex',
+                        justifyContent: 'flex-end',
+                        gap: 24
+                      }}>
+                        <div>
+                          <span style={{ color: '#666' }}>Tổng tiền: </span>
+                          <strong style={{ color: '#1890ff', fontSize: 16 }}>
+                            {formatCurrency(calculateOrderTotals(form).totalAmount)} ₫
+                          </strong>
+                        </div>
+                        <div>
+                          <span style={{ color: '#666' }}>Lợi nhuận: </span>
+                          <strong style={{ 
+                            color: calculateOrderTotals(form).totalProfit > 0 ? '#52c41a' : '#ff4d4f',
+                            fontSize: 16
+                          }}>
+                            {formatCurrency(calculateOrderTotals(form).totalProfit)} ₫
+                          </strong>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ textAlign: 'end', padding: '5px 0' }}>
+                      <p style={{ color: '#999', marginBottom: 12 }}>Chưa có sản phẩm nào</p>
+                      <Button
+                        type="primary"
+                        icon={<PlusOutlined />}
+                        onClick={() => handleAddProduct(form.id)}
+                        style={{ background: '#347e0fff', borderColor: '#327411ff', fontSize: 12 }}
+                      >
+                        Thêm Sản Phẩm Đầu 
+                      </Button>
+                    </div>
+                  )}
+                </Card>
+              ))}
+            </div>
+
+            <Divider />
+
+            {/* Submit Button */}
+            <div style={{ textAlign: 'end' }}>
+              <Space size="large">
+                <Button
+                  style={{
+                  
+                    minWidth: 20,
+                    height: 35,
+                    fontSize: 14,
+                    fontWeight: 600
+                  }}
+                  size="large"
+                  onClick={() => {
+                    setShowForms(false);
+                    setOrderForms([]);
+                    setOrderCount('');
+                  }}
+                >
+                  Hủy
+                </Button>
+                <Button
+                  type="primary"
+                  size="large"
+                  icon={<SaveOutlined />}
+                  onClick={handleCreateAllOrders}
+                  style={{
+                    background: '#007A33',
+                    borderColor: '#007A33',
+                    minWidth: 250,
+                    height: 35,
+                    fontSize: 14,
+                    fontWeight: 600
+                  }}
+                >
+                  Tạo Tất Cả {orderForms.length} Đơn Hàng Bán
+                </Button>
+              </Space>
+            </div>
+          </Card>
+        )}
+
+        {/* Info when no forms */}
+        {!showForms && (
+          <Card>
+            <div style={{ 
+              textAlign: 'center',
+              padding: '48px 24px',
+              color: '#999'
+            }}>
+              <ShoppingCartOutlined style={{ fontSize: 64, marginBottom: 16 }} />
+              <h3 style={{ color: '#666' }}>Nhập số lượng đơn hàng và nhấn "Xác Nhận"</h3>
+              <p>Hệ thống sẽ tạo các form đơn hàng để bạn điền thông tin</p>
+            </div>
+          </Card>
+        )}
+      </div>
+    </Spin>
+  );
+};
+
+export default CreateOrderTMDT;
