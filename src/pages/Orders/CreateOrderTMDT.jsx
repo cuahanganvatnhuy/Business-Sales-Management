@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Card,
   Form,
@@ -13,7 +14,9 @@ import {
   Col,
   Divider,
   Space,
-  Upload
+  Upload,
+  Table,
+  Modal
 } from 'antd';
 import {
   DeleteOutlined,
@@ -31,18 +34,20 @@ import {
 import { database } from '../../services/firebase.service';
 import { ref, onValue, push, set } from 'firebase/database';
 import { formatCurrency } from '../../utils/format';
+import { parseExcelOrders } from '../../utils/excelOrderParser';
 import dayjs from 'dayjs';
 import './Orders.css';
 
 const { Option } = Select;
 
 const CreateOrderTMDT = () => {
+  const navigate = useNavigate();
   const [mainForm] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [sellingProducts, setSellingProducts] = useState([]);
   
   // Order info
-  const [selectedPlatform, setSelectedPlatform] = useState('');
+  const [selectedPlatform, setSelectedPlatform] = useState(null);
   const [selectedDate, setSelectedDate] = useState(dayjs());
   const [orderCount, setOrderCount] = useState('');
   
@@ -53,6 +58,13 @@ const CreateOrderTMDT = () => {
   // Creation method
   const [creationMethod, setCreationMethod] = useState('manual'); // manual, pdf, excel
   const [uploadedFile, setUploadedFile] = useState(null);
+  
+  // Success modal
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [createdOrdersCount, setCreatedOrdersCount] = useState(0);
+  
+  // Upload progress
+  const [uploadProgress, setUploadProgress] = useState({ show: false, current: 0, total: 0, message: '' });
 
   // Platforms list
   const platforms = [
@@ -88,16 +100,96 @@ const CreateOrderTMDT = () => {
     return () => unsubscribe();
   }, []);
 
+  // Handle Excel file upload
+  const handleExcelUpload = async (file) => {
+    if (!selectedPlatform) {
+      message.warning('Vui lòng chọn sàn TMĐT trước!');
+      return false;
+    }
+
+    try {
+      // Show progress modal
+      setUploadProgress({ show: true, current: 0, total: 0, message: 'Đang đọc file Excel...' });
+      
+      // Parse Excel file
+      const parsedOrders = await parseExcelOrders(file, selectedPlatform, sellingProducts);
+      
+      if (parsedOrders.length === 0) {
+        setUploadProgress({ show: false, current: 0, total: 0, message: '' });
+        message.warning('Không tìm thấy đơn hàng nào trong file Excel!');
+        return false;
+      }
+
+      // Update progress: Processing orders
+      setUploadProgress({ show: true, current: 0, total: parsedOrders.length, message: 'Đang xử lý đơn hàng...' });
+
+      // Convert parsed orders to orderForms format with delay to show progress
+      const forms = [];
+      for (let i = 0; i < parsedOrders.length; i++) {
+        const order = parsedOrders[i];
+        
+        // Update progress
+        setUploadProgress({ 
+          show: true, 
+          current: i + 1, 
+          total: parsedOrders.length, 
+          message: `Đang xử lý đơn hàng ${i + 1}/${parsedOrders.length}...` 
+        });
+        
+        forms.push({
+          id: i + 1,
+          orderId: order.orderId,
+          items: order.items.map(item => ({
+            key: Date.now() + Math.random(),
+            productId: item.productId,
+            productName: item.productName,
+            sku: item.sku,
+            importPrice: item.importPrice,
+            sellingPrice: item.sellingPrice,
+            quantity: item.quantity,
+            subtotal: item.subtotal,
+            profit: item.profit
+          }))
+        });
+        
+        // Small delay to show progress (can remove for instant processing)
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+
+      setOrderForms(forms);
+      setShowForms(true);
+      setUploadProgress({ show: false, current: 0, total: 0, message: '' });
+      message.success(`✅ Đã tải thành công ${parsedOrders.length} đơn hàng từ Excel!`);
+      
+      return false; // Prevent default upload
+    } catch (error) {
+      console.error('Error processing Excel:', error);
+      setUploadProgress({ show: false, current: 0, total: 0, message: '' });
+      message.error(`Lỗi xử lý file Excel: ${error.message}`);
+      return false;
+    }
+  };
+
   // Generate order forms - Mỗi đơn hàng chứa nhiều sản phẩm
   const handleGenerateForms = () => {
     if (!selectedPlatform) {
-      message.warning('Vui lòng chọn sàn TMĐT!');
+      Modal.warning({
+        title: 'Chưa chọn sàn TMĐT',
+        content: 'Vui lòng chọn sàn thương mại điện tử trước khi tạo đơn hàng!',
+        okText: 'Đã hiểu',
+        centered: true
+      });
       return;
     }
 
     const count = parseInt(orderCount);
     if (!count || count < 1 || count > 1000) {
-      message.warning('Vui lòng nhập số lượng đơn hàng (1-1000)!');
+      Modal.warning({
+        title: 'Số lượng không hợp lệ',
+        content: 'Vui lòng nhập số lượng đơn hàng từ 1 đến 1000!',
+        okText: 'Đã hiểu',
+        centered: true
+      });
       return;
     }
 
@@ -246,10 +338,26 @@ const CreateOrderTMDT = () => {
 
   // Create all orders
   const handleCreateAllOrders = async () => {
+    // Validation: Check platform đã chọn chưa
+    if (!selectedPlatform) {
+      Modal.warning({
+        title: 'Chưa chọn sàn TMĐT',
+        content: 'Vui lòng chọn sàn thương mại điện tử trước khi tạo đơn hàng!',
+        okText: 'Đã hiểu',
+        centered: true
+      });
+      return;
+    }
+
     // Validation: Check mỗi đơn phải có ít nhất 1 sản phẩm
     const emptyOrders = orderForms.filter(form => form.items.length === 0);
     if (emptyOrders.length > 0) {
-      message.warning(`Có ${emptyOrders.length} đơn hàng chưa có sản phẩm! Vui lòng thêm sản phẩm.`);
+      Modal.warning({
+        title: 'Đơn hàng chưa có sản phẩm',
+        content: `Có ${emptyOrders.length} đơn hàng chưa có sản phẩm! Vui lòng thêm sản phẩm trước khi tạo.`,
+        okText: 'Đã hiểu',
+        centered: true
+      });
       return;
     }
 
@@ -263,22 +371,49 @@ const CreateOrderTMDT = () => {
     });
 
     if (hasInvalidItems) {
-      message.warning('Vui lòng chọn sản phẩm cho tất cả các dòng!');
+      Modal.warning({
+        title: 'Chưa chọn sản phẩm',
+        content: 'Vui lòng chọn sản phẩm cho tất cả các dòng trước khi tạo đơn hàng!',
+        okText: 'Đã hiểu',
+        centered: true
+      });
       return;
     }
 
     const otherPlatformName = mainForm.getFieldValue('otherPlatform');
     if (selectedPlatform === 'other' && !otherPlatformName) {
-      message.warning('Vui lòng nhập tên sàn khác!');
+      Modal.warning({
+        title: 'Chưa nhập tên sàn',
+        content: 'Vui lòng nhập tên sàn thương mại điện tử khác!',
+        okText: 'Đã hiểu',
+        centered: true
+      });
       return;
     }
 
-    setLoading(true);
     try {
+      // Show progress modal
+      setUploadProgress({ 
+        show: true, 
+        current: 0, 
+        total: orderForms.length, 
+        message: 'Đang tạo đơn hàng...' 
+      });
+
       const ordersRef = ref(database, 'salesOrders');
 
       // Save từng đơn hàng (mỗi đơn chứa nhiều items)
-      for (const form of orderForms) {
+      for (let i = 0; i < orderForms.length; i++) {
+        const form = orderForms[i];
+        
+        // Update progress
+        setUploadProgress({ 
+          show: true, 
+          current: i + 1, 
+          total: orderForms.length, 
+          message: `Đang tạo đơn hàng ${i + 1}/${orderForms.length}...` 
+        });
+        
         const orderTotals = calculateOrderTotals(form);
         
         const newOrderRef = push(ordersRef);
@@ -313,20 +448,28 @@ const CreateOrderTMDT = () => {
         });
       }
 
-      message.success(`✅ Đã tạo ${orderForms.length} đơn hàng TMĐT thành công!`);
+      console.log('✅ Orders created successfully, count:', orderForms.length);
       
-      // Reset
+      // Đóng progress modal
+      setUploadProgress({ show: false, current: 0, total: 0, message: '' });
+      
+      // Lưu số lượng đơn đã tạo
+      setCreatedOrdersCount(orderForms.length);
+      
+      // Reset form
       mainForm.resetFields();
       setOrderCount('');
       setOrderForms([]);
       setShowForms(false);
-      setSelectedPlatform('');
+      setSelectedPlatform(null);
       setSelectedDate(dayjs());
+      
+      // Hiển thị modal thành công
+      setShowSuccessModal(true);
     } catch (error) {
       console.error('Error creating orders:', error);
+      setUploadProgress({ show: false, current: 0, total: 0, message: '' });
       message.error('Lỗi tạo đơn hàng: ' + error.message);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -401,13 +544,6 @@ const CreateOrderTMDT = () => {
                 ✏️ Tự Tạo Đơn
               </Button>
               <Button
-                className={`method-button ${creationMethod === 'pdf' ? 'active' : ''}`}
-                icon={<FilePdfOutlined />}
-                onClick={() => setCreationMethod('pdf')}
-              >
-                📄 Upload PDF TikTok
-              </Button>
-              <Button
                 className={`method-button ${creationMethod === 'excel' ? 'active' : ''}`}
                 icon={<FileExcelOutlined />}
                 onClick={() => setCreationMethod('excel')}
@@ -418,13 +554,20 @@ const CreateOrderTMDT = () => {
 
             {/* Platform Selection - FULL WIDTH */}
             <Form.Item
-              label={<span style={{ fontWeight: 600 }}>Chọn Sàn TMĐT:</span>}
+              label={<span style={{ fontWeight: 600, fontSize: 15 }}>Chọn Sàn TMĐT:</span>}
+              required
             >
               <Select
-                placeholder="-- Chọn sàn thương mại điện tử --"
+                placeholder="🛒 Chọn sàn thương mại điện tử"
                 size="large"
                 value={selectedPlatform}
                 onChange={setSelectedPlatform}
+                style={{ fontSize: 15 }}
+                showSearch
+                allowClear
+                filterOption={(input, option) =>
+                  option.children.toLowerCase().includes(input.toLowerCase())
+                }
               >
                 {platforms.map(p => (
                   <Option key={p.value} value={p.value}>
@@ -530,12 +673,12 @@ const CreateOrderTMDT = () => {
                     <Upload.Dragger
                       accept=".xlsx,.xls"
                       maxCount={1}
-                      beforeUpload={(file) => {
-                        setUploadedFile(file);
-                        message.info(`File ${file.name} đã được chọn. Tính năng đang phát triển...`);
-                        return false;
+                      beforeUpload={handleExcelUpload}
+                      onRemove={() => {
+                        setUploadedFile(null);
+                        setOrderForms([]);
+                        setShowForms(false);
                       }}
-                      onRemove={() => setUploadedFile(null)}
                     >
                       <p className="ant-upload-drag-icon">
                         <InboxOutlined style={{ color: '#52c41a', fontSize: 32 }} />
@@ -585,6 +728,11 @@ const CreateOrderTMDT = () => {
                     }}>
                       <span>
                         <ShoppingCartOutlined /> Đơn Hàng Bán {form.id}
+                        {form.orderId && (
+                          <span style={{ marginLeft: 8, color: '#1890ff', fontSize: 13 }}>
+                            (Mã: {form.orderId})
+                          </span>
+                        )}
                       </span>
                       {orderForms.length > 1 && (
                         <Button
@@ -842,7 +990,69 @@ const CreateOrderTMDT = () => {
             </div>
           </Card>
         )}
+
+        
       </div>
+
+      {/* Upload Progress Modal */}
+      <Modal
+        open={uploadProgress.show}
+        footer={null}
+        closable={false}
+        centered
+        width={400}
+      >
+        <div style={{ textAlign: 'center', padding: '20px 0' }}>
+          <Spin size="large" />
+          <h3 style={{ marginTop: 20, marginBottom: 10, color: '#007A33' }}>
+            {uploadProgress.message}
+          </h3>
+          {uploadProgress.total > 0 && (
+            <p style={{ fontSize: 16, color: '#666' }}>
+              <strong style={{ color: '#52c41a', fontSize: 20 }}>{uploadProgress.current}</strong>
+              <span style={{ margin: '0 8px' }}>/</span>
+              <strong>{uploadProgress.total}</strong> đơn hàng
+            </p>
+          )}
+        </div>
+      </Modal>
+
+      {/* Success Modal */}
+      <Modal
+        open={showSuccessModal}
+        onOk={() => {
+          setShowSuccessModal(false);
+        }}
+        onCancel={() => {
+          setShowSuccessModal(false);
+          navigate('/orders/manage');
+        }}
+        okText="Ở Lại Trang Này"
+        cancelText="Quản Lý Đơn Hàng"
+        okButtonProps={{
+          style: { background: '#007A33', borderColor: '#007A33', minWidth: 120 }
+        }}
+        cancelButtonProps={{
+          style: { minWidth: 120 }
+        }}
+        centered
+        width={500}
+      >
+        <div style={{ padding: '20px 0' }}>
+          <div style={{ textAlign: 'center', marginBottom: 20 }}>
+            <CheckOutlined style={{ fontSize: 48, color: '#52c41a' }} />
+          </div>
+          <h3 style={{ textAlign: 'center', fontSize: 18, color: '#52c41a', marginBottom: 16 }}>
+            Tạo Đơn Hàng Thành Công!
+          </h3>
+          <p style={{ fontSize: 16, textAlign: 'center', marginBottom: 8 }}>
+            Đã tạo <strong style={{ color: '#52c41a', fontSize: 20 }}>{createdOrdersCount}</strong> đơn hàng TMĐT thành công!
+          </p>
+          <p style={{ color: '#666', fontSize: 14, textAlign: 'center' }}>
+            Dữ liệu đã được lưu vào hệ thống.
+          </p>
+        </div>
+      </Modal>
     </Spin>
   );
 };
