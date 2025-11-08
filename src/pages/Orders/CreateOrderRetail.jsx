@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { database } from '../../firebase/config';
+import { database } from '../../services/firebase.service';
 import { ref, onValue, push, set } from 'firebase/database';
 import {
   Card,
