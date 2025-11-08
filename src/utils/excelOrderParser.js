@@ -46,6 +46,7 @@ export async function parseExcelOrders(file, platform, sellingProducts) {
         if (matchedProduct) {
           orderData.productId = matchedProduct.id;
           orderData.productName = matchedProduct.productName || matchedProduct.name;
+          orderData.unit = matchedProduct.unit || 'kg';
           orderData.importPrice = matchedProduct.importPrice || 0;
           orderData.sellingPrice = matchedProduct.sellingPrice || 0;
           orderData.subtotal = orderData.sellingPrice * orderData.quantity;
@@ -188,6 +189,7 @@ function groupByOrderId(parsedRows) {
       productId: row.productId,
       productName: row.productName,
       sku: row.sku,
+      unit: row.unit || 'kg',
       quantity: row.quantity,
       importPrice: row.importPrice,
       sellingPrice: row.sellingPrice,

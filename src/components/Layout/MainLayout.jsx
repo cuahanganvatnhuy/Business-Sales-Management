@@ -87,9 +87,26 @@ const MainLayout = () => {
       ]
     },
     {
-      key: '/sales-orders/management',
+      key: 'manage-orders',
       icon: <i className="fas fa-chart-line" />,
       label: 'Quản Lý Đơn Hàng Bán',
+      children: [
+        {
+          key: '/orders/manage/ecommerce',
+          icon: <ShoppingCartOutlined />,
+          label: 'Quản lý đơn hàng TMĐT',
+        },
+        {
+          key: '/orders/manage/retail',
+          icon: <ShopOutlined />,
+          label: 'Quản lý đơn hàng lẻ',
+        },
+        {
+          key: '/orders/manage/wholesale',
+          icon: <TeamOutlined />,
+          label: 'Quản lý đơn hàng sỉ',
+        },
+      ]
     },
     {
       key: 'finance',

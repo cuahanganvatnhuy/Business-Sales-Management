@@ -146,6 +146,7 @@ const CreateOrderTMDT = () => {
             productId: item.productId,
             productName: item.productName,
             sku: item.sku,
+            unit: item.unit || 'kg',
             importPrice: item.importPrice,
             sellingPrice: item.sellingPrice,
             quantity: item.quantity,
@@ -257,6 +258,7 @@ const CreateOrderTMDT = () => {
                     productId: product.id,
                     productName: product.productName,
                     sku: product.sku,
+                    unit: product.unit || 'kg',
                     importPrice: product.importPrice,
                     sellingPrice: product.sellingPrice,
                     quantity,
@@ -419,8 +421,13 @@ const CreateOrderTMDT = () => {
         const orderTotals = calculateOrderTotals(form);
         
         const newOrderRef = push(ordersRef);
+        
+        // Generate orderId: Use Excel orderId if available, else generate new one
+        const generatedOrderId = form.orderId || `ECOM-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+        
         await set(newOrderRef, {
           // Order info
+          orderId: generatedOrderId,
           orderDate: selectedDate.format('YYYY-MM-DD'),
           platform: selectedPlatform,
           otherPlatform: selectedPlatform === 'other' ? otherPlatformName : '',
@@ -431,6 +438,7 @@ const CreateOrderTMDT = () => {
             productId: item.productId,
             productName: item.productName,
             sku: item.sku,
+            unit: item.unit || 'kg',
             importPrice: item.importPrice,
             sellingPrice: item.sellingPrice,
             quantity: item.quantity,
