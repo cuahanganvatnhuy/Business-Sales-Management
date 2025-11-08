@@ -34,9 +34,11 @@ import {
   ReloadOutlined,
   ShopOutlined,
   CheckCircleOutlined,
-  DollarOutlined
+  DollarOutlined,
+  PrinterOutlined
 } from '@ant-design/icons';
 import { formatCurrency } from '../../utils/format';
+import { printRetailInvoice } from '../../utils/printInvoice';
 import dayjs from 'dayjs';
 import './Orders.css';
 
@@ -82,6 +84,7 @@ const CreateOrderRetail = () => {
   // Success modal
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [createdProductCount, setCreatedProductCount] = useState(0);
+  const [lastCreatedOrder, setLastCreatedOrder] = useState(null);
 
   // Load selling products
   useEffect(() => {
@@ -287,8 +290,9 @@ const CreateOrderRetail = () => {
       const ordersRef = ref(database, 'retailSalesOrders');
       await push(ordersRef, retailOrder);
 
-      // Save product count before reset
+      // Save order data and product count before reset
       setCreatedProductCount(items.length);
+      setLastCreatedOrder(retailOrder);
 
       // Reset form
       setCustomerName('');
@@ -304,8 +308,26 @@ const CreateOrderRetail = () => {
       setShipping(0);
       mainForm.resetFields();
 
-      // Show success modal
+      // Show success modal and ask for print
       setShowSuccessModal(true);
+      
+      // Ask if user wants to print invoice
+      setTimeout(() => {
+        Modal.confirm({
+          title: '🖨️ In Hóa Đơn',
+          content: 'Bạn có muốn in hóa đơn cho đơn hàng này không?',
+          okText: 'In Hóa Đơn',
+          cancelText: 'Không, Cảm Ơn',
+          centered: true,
+          onOk() {
+            printRetailInvoice(retailOrder);
+            message.success('Đang mở cửa sổ in hóa đơn...');
+          },
+          onCancel() {
+            console.log('User declined to print invoice');
+          }
+        });
+      }, 500);
     } catch (error) {
       console.error('Error creating order:', error);
       message.error('Lỗi tạo đơn hàng: ' + error.message);
@@ -684,21 +706,39 @@ const CreateOrderRetail = () => {
             <p style={{ fontSize: 16, color: '#666', marginBottom: 24 }}>
               Đơn hàng bán lẻ với <strong>{createdProductCount} sản phẩm</strong> đã được tạo thành công.
             </p>
-            <Space size="middle">
-              <Button
-                size="large"
-                onClick={() => setShowSuccessModal(false)}
-              >
-                Ở Lại Trang Này
-              </Button>
-              <Button
-                type="primary"
-                size="large"
-                onClick={() => navigate('/orders/manage')}
-                style={{ background: '#007A33' }}
-              >
-                Quản Lý Đơn Hàng
-              </Button>
+            <Space size="middle" direction="vertical" style={{ width: '100%' }}>
+              <Space size="middle">
+                <Button
+                  size="large"
+                  onClick={() => setShowSuccessModal(false)}
+                >
+                  Ở Lại Trang Này
+                </Button>
+                <Button
+                  type="primary"
+                  size="large"
+                  onClick={() => navigate('/orders/manage')}
+                  style={{ background: '#007A33' }}
+                >
+                  Quản Lý Đơn Hàng
+                </Button>
+              </Space>
+              {lastCreatedOrder && (
+                <Button
+                  size="large"
+                  icon={<PrinterOutlined />}
+                  onClick={() => {
+                    printRetailInvoice(lastCreatedOrder);
+                    message.success('Đang mở cửa sổ in hóa đơn...');
+                  }}
+                  style={{ 
+                    borderColor: '#007A33',
+                    color: '#007A33'
+                  }}
+                >
+                  In Hóa Đơn
+                </Button>
+              )}
             </Space>
           </div>
         </Modal>
