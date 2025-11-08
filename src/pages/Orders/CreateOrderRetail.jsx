@@ -368,10 +368,10 @@ const CreateOrderRetail = () => {
           }}
         >
           <Form form={mainForm} layout="vertical">
-            {/* Customer Info */}
-            <Divider orientation="left">Thông Tin Khách Hàng</Divider>
+            {/* Row 1: Customer Name, Phone, Sales Channel */}
+            <Divider orientation="left">Thông Tin Đơn Hàng</Divider>
             <Row gutter={16}>
-              <Col xs={24} md={12}>
+              <Col xs={24} md={8}>
                 <Form.Item label="Tên Khách Hàng" required>
                   <Input
                     prefix={<UserOutlined />}
@@ -382,7 +382,7 @@ const CreateOrderRetail = () => {
                   />
                 </Form.Item>
               </Col>
-              <Col xs={24} md={12}>
+              <Col xs={24} md={8}>
                 <Form.Item label="Số Điện Thoại">
                   <Input
                     prefix={<PhoneOutlined />}
@@ -393,10 +393,21 @@ const CreateOrderRetail = () => {
                   />
                 </Form.Item>
               </Col>
+              <Col xs={24} md={8}>
+                <Form.Item label="Kênh Bán" required>
+                  <Select
+                    value={salesChannel}
+                    onChange={setSalesChannel}
+                    size="large"
+                  >
+                    <Option value="offline">🏪 Bán Lẻ Trực Tiếp</Option>
+                    <Option value="tmdt">🛒 Sàn TMĐT</Option>
+                  </Select>
+                </Form.Item>
+              </Col>
             </Row>
 
-            {/* Order Info */}
-            <Divider orientation="left">Thông Tin Bán Hàng</Divider>
+            {/* Row 2: Date, Time, Product Count */}
             <Row gutter={16}>
               <Col xs={24} md={8}>
                 <Form.Item label="Ngày Bán" required>
@@ -421,15 +432,27 @@ const CreateOrderRetail = () => {
                 </Form.Item>
               </Col>
               <Col xs={24} md={8}>
-                <Form.Item label="Kênh Bán" required>
-                  <Select
-                    value={salesChannel}
-                    onChange={setSalesChannel}
-                    size="large"
-                  >
-                    <Option value="offline">🏪 Bán Lẻ Trực Tiếp</Option>
-                    <Option value="tmdt">🛒 Sàn TMĐT</Option>
-                  </Select>
+                <Form.Item label="Số Lượng Sản Phẩm">
+                  <Space.Compact style={{ width: '100%' }}>
+                    <InputNumber
+                      placeholder="Nhập SL sản phẩm"
+                      value={productCount}
+                      onChange={setProductCount}
+                      min={1}
+                      max={50}
+                      style={{ width: '100%' }}
+                      size="large"
+                    />
+                    <Button
+                      type="primary"
+                      icon={<CheckCircleOutlined />}
+                      onClick={handleGenerateForms}
+                      size="large"
+                      style={{ background: '#007A33' }}
+                    >
+                      Xác Nhận
+                    </Button>
+                  </Space.Compact>
                 </Form.Item>
               </Col>
             </Row>
@@ -455,38 +478,6 @@ const CreateOrderRetail = () => {
                 </Col>
               </Row>
             )}
-
-            {/* Product Count */}
-            <Divider orientation="left">Thông Tin Sản Phẩm</Divider>
-            <Row gutter={16}>
-              <Col xs={24} md={12}>
-                <Form.Item label="Số Lượng Sản Phẩm">
-                  <Space.Compact style={{ width: '100%' }}>
-                    <InputNumber
-                      placeholder="Nhập số lượng sản phẩm"
-                      value={productCount}
-                      onChange={setProductCount}
-                      min={1}
-                      max={50}
-                      style={{ width: '100%' }}
-                      size="large"
-                    />
-                    <Button
-                      type="primary"
-                      icon={<CheckCircleOutlined />}
-                      onClick={handleGenerateForms}
-                      size="large"
-                      style={{ background: '#007A33' }}
-                    >
-                      Xác Nhận
-                    </Button>
-                  </Space.Compact>
-                  <div style={{ marginTop: 8, color: '#666', fontSize: 13 }}>
-                    Nhập số lượng sản phẩm bạn muốn thêm vào đơn hàng (tối đa 50)
-                  </div>
-                </Form.Item>
-              </Col>
-            </Row>
           </Form>
         </Card>
 
