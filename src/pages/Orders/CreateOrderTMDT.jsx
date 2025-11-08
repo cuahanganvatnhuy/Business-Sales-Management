@@ -21,6 +21,7 @@ import {
 import {
   DeleteOutlined,
   ShoppingCartOutlined,
+  ShoppingOutlined,
   CheckOutlined,
   SaveOutlined,
   FilePdfOutlined,
@@ -29,7 +30,8 @@ import {
   UploadOutlined,
   InboxOutlined,
   ShopOutlined,
-  PlusOutlined
+  PlusOutlined,
+  TeamOutlined
 } from '@ant-design/icons';
 import { database } from '../../services/firebase.service';
 import { ref, onValue, push, set } from 'firebase/database';
@@ -479,40 +481,61 @@ const CreateOrderTMDT = () => {
     <Spin spinning={loading}>
       <div className="create-order-page">
         {/* Header */}
-        <div style={{ marginBottom: 20 }}>
-          <h2 style={{ 
-            margin: 0, 
-            fontSize: 20, 
-            fontWeight: 600, 
-            color: '#007A33',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8
-          }}>
-            + Thêm Đơn Hàng Mới
-          </h2>
-        </div>
+        <Card 
+          style={{ 
+            marginBottom: 24,
+            borderRadius: 12,
+            boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <ShoppingOutlined style={{ fontSize: 32, color: '#007A33' }} />
+            <div>
+              <h1 style={{ margin: 0, fontSize: 24, color: '#007A33' }}>Tạo Đơn Hàng TMĐT</h1>
+              <p style={{ margin: 0, color: '#666' }}>Tạo đơn hàng từ các sàn thương mại điện tử</p>
+            </div>
+          </div>
+        </Card>
 
-        {/* Order Type Selection */}
-        <div className="order-type-buttons">
-          <Button
-            type="primary"
-            icon={<ShoppingCartOutlined />}
-          >
-            🛒 Đơn TMĐT
-          </Button>
-          <Button
-            icon={<ShopOutlined />}
-            onClick={() => message.info('Chức năng Đơn Bán Lẻ sẽ được phát triển')}
-          >
-            🏪 Đơn Bán Lẻ
-          </Button>
-          <Button
-            icon={<InboxOutlined />}
-            onClick={() => message.info('Chức năng Đơn Bán Sỉ sẽ được phát triển')}
-          >
-            📦 Đơn Bán Sỉ
-          </Button>
+        {/* Order Type Tabs */}
+        <div style={{ marginBottom: 24 }}>
+          <Space size="middle">
+            <Button
+              icon={<ShoppingOutlined />}
+              size="large"
+              type="primary"
+              style={{
+                background: '#007A33',
+                borderColor: '#007A33'
+              }}
+            >
+              Đơn TMĐT
+            </Button>
+            <Button
+              icon={<ShopOutlined />}
+              size="large"
+              onClick={() => navigate('/orders/create/retail')}
+              style={{
+                borderColor: '#d9d9d9',
+                background: 'white',
+                color: '#666'
+              }}
+            >
+              Đơn Bán Lẻ
+            </Button>
+            <Button
+              icon={<TeamOutlined />}
+              size="large"
+              onClick={() => navigate('/orders/create/wholesale')}
+              style={{
+                borderColor: '#d9d9d9',
+                background: 'white',
+                color: '#666'
+              }}
+            >
+              Đơn Bán Sỉ
+            </Button>
+          </Space>
         </div>
 
         {/* Order Info Form */}

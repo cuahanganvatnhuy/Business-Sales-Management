@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { database } from '../../services/firebase.service';
-import { ref, onValue, push, set } from 'firebase/database';
+import { ref, onValue, push, set, get } from 'firebase/database';
 import {
   Card,
   Form,
@@ -25,9 +25,6 @@ import {
   ShoppingOutlined,
   UserOutlined,
   PhoneOutlined,
-  EnvironmentOutlined,
-  CalendarOutlined,
-  TeamOutlined,
   PlusOutlined,
   DeleteOutlined,
   SaveOutlined,
@@ -35,10 +32,12 @@ import {
   ShopOutlined,
   CheckCircleOutlined,
   DollarOutlined,
-  PrinterOutlined
+  PrinterOutlined,
+  TeamOutlined,
+  EnvironmentOutlined
 } from '@ant-design/icons';
 import { formatCurrency } from '../../utils/format';
-import { printRetailInvoice } from '../../utils/printInvoice';
+import { printWholesaleInvoice } from '../../utils/printInvoice';
 import dayjs from 'dayjs';
 import './Orders.css';
 
@@ -65,19 +64,23 @@ const CreateOrderWholesale = () => {
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // Customer selection
+  // Customer selection & info
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [showCustomerModal, setShowCustomerModal] = useState(false);
-
-  // Customer & Order info
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [saveCustomer, setSaveCustomer] = useState(true);
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerAddress, setCustomerAddress] = useState('');
+  const [customerPriceHistory, setCustomerPriceHistory] = useState({}); // Store customer's previous prices per product
+
+  // Order info
   const [selectedDate, setSelectedDate] = useState(dayjs());
   const [deliveryDate, setDeliveryDate] = useState(null);
 
-  // Product forms - each with wholesale price
+  // Product forms
   const [productForms, setProductForms] = useState([]);
+  const [showForms, setShowForms] = useState(false);
 
   // Order totals
   const [discount, setDiscount] = useState(0);
@@ -127,37 +130,81 @@ const CreateOrderWholesale = () => {
     return () => unsubscribe();
   }, []);
 
-  // Generate product forms
-  const handleGenerateForms = () => {
-    const count = parseInt(productCount);
-    if (!count || count < 1 || count > 50) {
-      Modal.warning({
-        title: 'Số lượng không hợp lệ',
-        content: 'Vui lòng nhập số lượng sản phẩm từ 1 đến 50!',
-        okText: 'Đã hiểu',
-        centered: true
-      });
-      return;
-    }
+  // Load customer's previous orders to get price history
+  const loadCustomerPriceHistory = async (customerId, customerName) => {
+    try {
+      const ordersRef = ref(database, 'wholesaleSalesOrders');
+      const snapshot = await get(ordersRef);
+      
+      const ordersData = snapshot.val();
+      if (!ordersData) {
+        setCustomerPriceHistory({});
+        return;
+      }
 
-    const forms = [];
-    for (let i = 1; i <= count; i++) {
-      forms.push({
-        id: i,
-        productId: null,
-        productName: '',
-        sku: '',
-        quantity: 1,
-        sellingPrice: 0,
-        importPrice: 0,
-        total: 0,
-        profit: 0
-      });
-    }
+      // Filter orders by customer
+      const customerOrders = Object.values(ordersData)
+        .filter(order => 
+          order.customerId === customerId || 
+          order.customerName === customerName
+        )
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)); // Latest first
 
-    setProductForms(forms);
+      if (customerOrders.length === 0) {
+        setCustomerPriceHistory({});
+        return;
+      }
+
+      // Get most recent order's pricing for each product
+      const priceHistory = {};
+      const latestOrder = customerOrders[0]; // Most recent order
+
+      if (latestOrder.items && Array.isArray(latestOrder.items)) {
+        latestOrder.items.forEach(item => {
+          priceHistory[item.productId] = {
+            discountType: item.discountType || 'fixed',
+            discountValue: item.discountValue || 0,
+            priceAfterDiscount: item.priceAfterDiscount || item.sellingPrice
+          };
+        });
+      }
+
+      setCustomerPriceHistory(priceHistory);
+      console.log('📊 Loaded price history for customer:', priceHistory);
+      
+      if (Object.keys(priceHistory).length > 0) {
+        message.success(`Đã tải lịch sử giá cho ${Object.keys(priceHistory).length} sản phẩm từ đơn trước`);
+      }
+    } catch (error) {
+      console.error('Error loading customer price history:', error);
+      setCustomerPriceHistory({});
+    }
+  };
+
+  // Add single product
+  const handleAddProduct = () => {
+    const newId = productForms.length > 0 
+      ? Math.max(...productForms.map(f => f.id)) + 1 
+      : 1;
+
+    const newForm = {
+      id: newId,
+      productId: null,
+      productName: '',
+      sku: '',
+      quantity: 1,
+      sellingPrice: 0,
+      importPrice: 0,
+      discountType: 'fixed',
+      discountValue: 0,
+      priceAfterDiscount: 0,
+      total: 0,
+      profit: 0
+    };
+
+    setProductForms(prevForms => [...prevForms, newForm]);
     setShowForms(true);
-    message.success(`Đã tạo ${count} form sản phẩm!`);
+    message.success('Đã thêm sản phẩm mới!');
   };
 
   // Update product selection
@@ -168,8 +215,23 @@ const CreateOrderWholesale = () => {
     setProductForms(prevForms =>
       prevForms.map(form => {
         if (form.id === formId) {
-          const total = product.sellingPrice * form.quantity;
-          const profit = (product.sellingPrice - product.importPrice) * form.quantity;
+          // Check if customer has price history for this product
+          const priceHistory = customerPriceHistory[productId];
+          
+          let discountType = 'fixed';
+          let discountValue = 0;
+          let priceAfterDiscount = product.sellingPrice;
+
+          if (priceHistory) {
+            // Apply customer's previous pricing
+            discountType = priceHistory.discountType;
+            discountValue = priceHistory.discountValue;
+            priceAfterDiscount = priceHistory.priceAfterDiscount;
+            console.log(`✅ Áp dụng giá cũ cho ${product.productName}:`, priceHistory);
+          }
+
+          const total = priceAfterDiscount * form.quantity;
+          const profit = (priceAfterDiscount - product.importPrice) * form.quantity;
           
           return {
             ...form,
@@ -177,6 +239,9 @@ const CreateOrderWholesale = () => {
             productName: product.productName,
             sku: product.sku,
             sellingPrice: product.sellingPrice,
+            discountType: discountType,
+            discountValue: discountValue,
+            priceAfterDiscount: priceAfterDiscount,
             importPrice: product.importPrice,
             total: total,
             profit: profit
@@ -192,8 +257,8 @@ const CreateOrderWholesale = () => {
     setProductForms(prevForms =>
       prevForms.map(form => {
         if (form.id === formId) {
-          const total = form.sellingPrice * quantity;
-          const profit = (form.sellingPrice - form.importPrice) * quantity;
+          const total = form.priceAfterDiscount * quantity;
+          const profit = (form.priceAfterDiscount - form.importPrice) * quantity;
           
           return {
             ...form,
@@ -207,9 +272,69 @@ const CreateOrderWholesale = () => {
     );
   };
 
+  // Update discount type
+  const handleDiscountTypeChange = (formId, discountType) => {
+    setProductForms(prevForms =>
+      prevForms.map(form => {
+        if (form.id === formId) {
+          // Reset discount value when changing type
+          return {
+            ...form,
+            discountType: discountType,
+            discountValue: 0,
+            priceAfterDiscount: form.sellingPrice,
+            total: form.sellingPrice * form.quantity,
+            profit: (form.sellingPrice - form.importPrice) * form.quantity
+          };
+        }
+        return form;
+      })
+    );
+  };
+
+  // Update discount value
+  const handleDiscountValueChange = (formId, value) => {
+    setProductForms(prevForms =>
+      prevForms.map(form => {
+        if (form.id === formId) {
+          let priceAfterDiscount = form.sellingPrice;
+          
+          if (form.discountType === 'fixed') {
+            // Giảm theo giá cố định
+            priceAfterDiscount = form.sellingPrice - value;
+          } else {
+            // Giảm theo %
+            priceAfterDiscount = form.sellingPrice * (1 - value / 100);
+          }
+
+          // Đảm bảo giá sau giảm không âm
+          priceAfterDiscount = Math.max(0, priceAfterDiscount);
+
+          const total = priceAfterDiscount * form.quantity;
+          const profit = (priceAfterDiscount - form.importPrice) * form.quantity;
+          
+          return {
+            ...form,
+            discountValue: value,
+            priceAfterDiscount: priceAfterDiscount,
+            total: total,
+            profit: profit
+          };
+        }
+        return form;
+      })
+    );
+  };
+
   // Delete product form
   const handleDeleteForm = (formId) => {
-    setProductForms(prevForms => prevForms.filter(form => form.id !== formId));
+    setProductForms(prevForms => {
+      const newForms = prevForms.filter(form => form.id !== formId);
+      if (newForms.length === 0) {
+        setShowForms(false);
+      }
+      return newForms;
+    });
     message.success('Đã xóa sản phẩm!');
   };
 
@@ -218,8 +343,9 @@ const CreateOrderWholesale = () => {
     const subtotal = productForms.reduce((sum, form) => sum + form.total, 0);
     const totalProfit = productForms.reduce((sum, form) => sum + form.profit, 0);
     const finalAmount = subtotal - discount + shipping;
+    const remaining = finalAmount - deposit;
 
-    return { subtotal, totalProfit, finalAmount };
+    return { subtotal, totalProfit, finalAmount, remaining };
   };
 
   // Create order
@@ -256,10 +382,10 @@ const CreateOrderWholesale = () => {
       return;
     }
 
-    if (salesChannel === 'tmdt' && !selectedPlatform) {
+    if (!customerAddress || !customerAddress.trim()) {
       Modal.warning({
-        title: 'Chưa chọn sàn TMĐT',
-        content: 'Vui lòng chọn sàn thương mại điện tử!',
+        title: 'Chưa nhập địa chỉ',
+        content: 'Vui lòng nhập địa chỉ khách hàng!',
         okText: 'Đã hiểu',
         centered: true
       });
@@ -269,7 +395,7 @@ const CreateOrderWholesale = () => {
     try {
       setLoading(true);
 
-      const { subtotal, totalProfit, finalAmount } = calculateTotals();
+      const { subtotal, totalProfit, finalAmount, remaining } = calculateTotals();
 
       // Prepare order items
       const items = productForms.map(form => ({
@@ -278,53 +404,74 @@ const CreateOrderWholesale = () => {
         sku: form.sku,
         quantity: form.quantity,
         sellingPrice: form.sellingPrice,
+        discountType: form.discountType,
+        discountValue: form.discountValue,
+        priceAfterDiscount: form.priceAfterDiscount,
+        discountAmount: form.sellingPrice - form.priceAfterDiscount,
         importPrice: form.importPrice,
         totalAmount: form.total,
         totalProfit: form.profit,
-        profitPerUnit: form.sellingPrice - form.importPrice
+        profitPerUnit: form.priceAfterDiscount - form.importPrice
       }));
 
-      // Create order object
-      const retailOrder = {
-        orderId: `RETAIL-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      // Create wholesale order object
+      const wholesaleOrder = {
+        orderId: `WHOLESALE-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         items: items,
         orderDate: selectedDate.format('YYYY-MM-DD'),
-        orderTime: selectedTime.format('HH:mm'),
+        deliveryDate: deliveryDate ? deliveryDate.format('YYYY-MM-DD') : null,
+        customerId: selectedCustomer ? selectedCustomer.id : null,
         customerName: customerName.trim(),
         customerPhone: customerPhone ? customerPhone.trim() : '',
+        customerAddress: customerAddress.trim(),
         subtotal: subtotal,
         discount: discount,
         shipping: shipping,
+        deposit: deposit,
         totalAmount: finalAmount,
+        remainingAmount: remaining,
         totalProfit: totalProfit,
         itemCount: items.length,
-        source: 'retail_sales',
-        orderType: salesChannel === 'tmdt' ? 'tmdt' : 'retail',
-        salesChannel: salesChannel,
-        platform: selectedPlatform || null,
+        source: 'wholesale_sales',
+        orderType: 'wholesale',
+        paymentStatus: deposit >= finalAmount ? 'paid' : deposit > 0 ? 'partial' : 'pending',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-        status: 'completed'
+        status: 'pending'
       };
 
       // Save to Firebase
-      const ordersRef = ref(database, 'retailSalesOrders');
-      await push(ordersRef, retailOrder);
+      const ordersRef = ref(database, 'wholesaleSalesOrders');
+      await push(ordersRef, wholesaleOrder);
+
+      // Save customer if checkbox is checked and not already selected from list
+      if (saveCustomer && !selectedCustomer) {
+        const customersRef = ref(database, 'wholesaleCustomers');
+        await push(customersRef, {
+          name: customerName.trim(),
+          phone: customerPhone ? customerPhone.trim() : '',
+          address: customerAddress.trim(),
+          createdAt: new Date().toISOString()
+        });
+        console.log('✅ Đã lưu thông tin khách hàng vào danh bạ');
+      }
 
       // Save order data and product count before reset
       setCreatedProductCount(items.length);
-      setLastCreatedOrder(retailOrder);
+      setLastCreatedOrder(wholesaleOrder);
 
       // Reset form
       setCustomerName('');
       setCustomerPhone('');
+      setCustomerAddress('');
+      setSelectedCustomer(null);
+      setCustomerPriceHistory({});
+      setSaveCustomer(true);
       setSelectedDate(dayjs());
-      setSelectedTime(dayjs());
-      setSalesChannel('offline');
-      setSelectedPlatform(null);
+      setDeliveryDate(null);
+      setDeposit(0);
       setProductForms([]);
       setShowForms(false);
-      setProductCount('');
       setDiscount(0);
       setShipping(0);
       mainForm.resetFields();
@@ -341,7 +488,7 @@ const CreateOrderWholesale = () => {
           cancelText: 'Không, Cảm Ơn',
           centered: true,
           onOk() {
-            printRetailInvoice(retailOrder);
+            printWholesaleInvoice(wholesaleOrder);
             message.success('Đang mở cửa sổ in hóa đơn...');
           },
           onCancel() {
@@ -357,7 +504,7 @@ const CreateOrderWholesale = () => {
     }
   };
 
-  const { subtotal, totalProfit, finalAmount } = calculateTotals();
+  const { subtotal, totalProfit, finalAmount, remaining } = calculateTotals();
 
   return (
     <div style={{ padding: '24px' }}>
@@ -379,6 +526,47 @@ const CreateOrderWholesale = () => {
           </div>
         </Card>
 
+        {/* Order Type Tabs */}
+        <div style={{ marginBottom: 24 }}>
+          <Space size="middle">
+            <Button
+              icon={<ShoppingOutlined />}
+              size="large"
+              onClick={() => navigate('/orders/create/ecommerce')}
+              style={{
+                borderColor: '#d9d9d9',
+                background: 'white',
+                color: '#666'
+              }}
+            >
+              Đơn TMĐT
+            </Button>
+            <Button
+              icon={<ShopOutlined />}
+              size="large"
+              onClick={() => navigate('/orders/create/retail')}
+              style={{
+                borderColor: '#d9d9d9',
+                background: 'white',
+                color: '#666'
+              }}
+            >
+              Đơn Bán Lẻ
+            </Button>
+            <Button
+              icon={<TeamOutlined />}
+              size="large"
+              type="primary"
+              style={{
+                background: '#007A33',
+                borderColor: '#007A33'
+              }}
+            >
+              Đơn Bán Sỉ
+            </Button>
+          </Space>
+        </div>
+
         {/* Main Form */}
         <Card 
           title={<><UserOutlined /> Thông Tin Đơn Hàng</>}
@@ -394,13 +582,22 @@ const CreateOrderWholesale = () => {
             <Row gutter={16}>
               <Col xs={24} md={8}>
                 <Form.Item label="Tên Khách Hàng" required>
-                  <Input
-                    prefix={<UserOutlined />}
-                    placeholder="Nhập tên khách hàng"
-                    value={customerName}
-                    onChange={(e) => setCustomerName(e.target.value)}
-                    size="large"
-                  />
+                  <Space.Compact style={{ width: '100%' }}>
+                    <Input
+                      prefix={<UserOutlined />}
+                      placeholder="Nhập tên khách hàng"
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                      size="large"
+                    />
+                    <Button
+                      icon={<TeamOutlined />}
+                      onClick={() => setShowCustomerModal(true)}
+                      size="large"
+                      style={{ background: '#007A33', color: 'white' }}
+                      title="Chọn khách hàng"
+                    />
+                  </Space.Compact>
                 </Form.Item>
               </Col>
               <Col xs={24} md={8}>
@@ -415,16 +612,32 @@ const CreateOrderWholesale = () => {
                 </Form.Item>
               </Col>
               <Col xs={24} md={8}>
-                <Form.Item label="Kênh Bán" required>
-                  <Select
-                    value={salesChannel}
-                    onChange={setSalesChannel}
+                <Form.Item label="Địa Chỉ" required>
+                  <Input
+                    prefix={<ShopOutlined />}
+                    placeholder="Nhập địa chỉ khách hàng"
+                    value={customerAddress}
+                    onChange={(e) => setCustomerAddress(e.target.value)}
                     size="large"
-                  >
-                    <Option value="offline">🏪 Bán Lẻ Trực Tiếp</Option>
-                    <Option value="tmdt">🛒 Sàn TMĐT</Option>
-                  </Select>
+                  />
                 </Form.Item>
+              </Col>
+            </Row>
+
+            <Row gutter={16}>
+              <Col xs={24}>
+                <Checkbox
+                  checked={saveCustomer}
+                  onChange={(e) => setSaveCustomer(e.target.checked)}
+                  disabled={!!selectedCustomer}
+                  style={{ marginBottom: 16 }}
+                >
+                  <span style={{ color: selectedCustomer ? '#999' : '#666' }}>
+                    {selectedCustomer 
+                      ? 'Khách hàng đã có trong danh bạ' 
+                      : 'Lưu thông tin khách hàng vào danh bạ'}
+                  </span>
+                </Checkbox>
               </Col>
             </Row>
 
@@ -442,63 +655,35 @@ const CreateOrderWholesale = () => {
                 </Form.Item>
               </Col>
               <Col xs={24} md={8}>
-                <Form.Item label="Giờ Bán" required>
-                  <TimePicker
-                    value={selectedTime}
-                    onChange={setSelectedTime}
-                    format="HH:mm"
+                <Form.Item label="Ngày Giao Hàng">
+                  <DatePicker
+                    value={deliveryDate}
+                    onChange={setDeliveryDate}
+                    format="DD/MM/YYYY"
                     style={{ width: '100%' }}
                     size="large"
+                    placeholder="Chọn ngày giao hàng"
                   />
                 </Form.Item>
               </Col>
               <Col xs={24} md={8}>
-                <Form.Item label="Số Lượng Sản Phẩm">
-                  <Space.Compact style={{ width: '100%' }}>
-                    <InputNumber
-                      placeholder="Nhập SL sản phẩm"
-                      value={productCount}
-                      onChange={setProductCount}
-                      min={1}
-                      max={50}
-                      style={{ width: '100%' }}
-                      size="large"
-                    />
-                    <Button
-                      type="primary"
-                      icon={<CheckCircleOutlined />}
-                      onClick={handleGenerateForms}
-                      size="large"
-                      style={{ background: '#007A33' }}
-                    >
-                      Xác Nhận
-                    </Button>
-                  </Space.Compact>
+                <Form.Item label=" " colon={false}>
+                  <Button
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    onClick={handleAddProduct}
+                    size="large"
+                    style={{ 
+                      background: '#007A33',
+                      width: '100%'
+                    }}
+                  >
+                    Thêm Sản Phẩm
+                  </Button>
                 </Form.Item>
               </Col>
             </Row>
 
-            {/* Platform Selection (if TMDT) */}
-            {salesChannel === 'tmdt' && (
-              <Row gutter={16}>
-                <Col xs={24} md={12}>
-                  <Form.Item label="Chọn Sàn TMĐT" required>
-                    <Select
-                      placeholder="🛒 Chọn sàn thương mại điện tử"
-                      value={selectedPlatform}
-                      onChange={setSelectedPlatform}
-                      size="large"
-                      allowClear
-                      showSearch
-                    >
-                      {platforms.map(p => (
-                        <Option key={p.value} value={p.value}>{p.label}</Option>
-                      ))}
-                    </Select>
-                  </Form.Item>
-                </Col>
-              </Row>
-            )}
           </Form>
         </Card>
 
@@ -518,16 +703,14 @@ const CreateOrderWholesale = () => {
                 type="inner"
                 title={`Sản Phẩm ${form.id}`}
                 extra={
-                  productForms.length > 1 && (
-                    <Button
-                      type="text"
-                      danger
-                      icon={<DeleteOutlined />}
-                      onClick={() => handleDeleteForm(form.id)}
-                    >
-                      Xóa
-                    </Button>
-                  )
+                  <Button
+                    type="text"
+                    danger
+                    icon={<DeleteOutlined />}
+                    onClick={() => handleDeleteForm(form.id)}
+                  >
+                    Xóa
+                  </Button>
                 }
                 style={{ marginBottom: 16 }}
               >
@@ -590,8 +773,86 @@ const CreateOrderWholesale = () => {
                     </Form.Item>
                   </Col>
                 </Row>
+
+                {/* Discount Row */}
+                <Row gutter={16} style={{ marginTop: 8 }}>
+                  <Col xs={24} md={6}>
+                    <Form.Item label="Loại Giảm Giá">
+                      <Select
+                        value={form.discountType}
+                        onChange={(value) => handleDiscountTypeChange(form.id, value)}
+                        size="large"
+                      >
+                        <Option value="fixed">💰 Giảm Giá Cố Định</Option>
+                        <Option value="percent">% Giảm Theo Phần Trăm</Option>
+                      </Select>
+                    </Form.Item>
+                  </Col>
+                  <Col xs={24} md={6}>
+                    <Form.Item label={form.discountType === 'fixed' ? 'Giảm Giá (₫)' : 'Giảm Giá (%)'}>
+                      <InputNumber
+                        value={form.discountValue}
+                        onChange={(value) => handleDiscountValueChange(form.id, value)}
+                        min={0}
+                        max={form.discountType === 'percent' ? 100 : form.sellingPrice}
+                        formatter={(value) => form.discountType === 'fixed' 
+                          ? `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+                          : `${value}`}
+                        parser={(value) => value.replace(/\$\s?|(,*)/g, '')}
+                        style={{ width: '100%' }}
+                        size="large"
+                        placeholder={form.discountType === 'fixed' ? 'Nhập số tiền giảm' : 'Nhập % giảm'}
+                      />
+                    </Form.Item>
+                  </Col>
+                  <Col xs={24} md={6}>
+                    <Form.Item label="Giá Sau Giảm">
+                      <Input
+                        value={formatCurrency(form.priceAfterDiscount)}
+                        disabled
+                        size="large"
+                        style={{ 
+                          color: form.discountValue > 0 ? '#ff4d4f' : '#007A33', 
+                          fontWeight: 600,
+                          background: form.discountValue > 0 ? '#fff1f0' : '#f6ffed'
+                        }}
+                      />
+                    </Form.Item>
+                  </Col>
+                  <Col xs={24} md={6}>
+                    <Form.Item label="Tiết Kiệm">
+                      <Input
+                        value={formatCurrency(form.sellingPrice - form.priceAfterDiscount)}
+                        disabled
+                        size="large"
+                        style={{ 
+                          color: '#52c41a', 
+                          fontWeight: 600,
+                          background: '#f6ffed'
+                        }}
+                      />
+                    </Form.Item>
+                  </Col>
+                </Row>
               </Card>
             ))}
+
+            <div style={{ textAlign: 'end', marginTop: 16 }}>
+              <Button
+                type="dashed"
+                icon={<PlusOutlined />}
+                onClick={handleAddProduct}
+                size="large"
+                style={{
+                  borderColor: '#007A33',
+                  color: '#007A33',
+                  width: '150px',
+                  fontSize:'12px'
+                }}
+              >
+                Thêm Sản Phẩm
+              </Button>
+            </div>
           </Card>
         )}
 
@@ -605,6 +866,51 @@ const CreateOrderWholesale = () => {
               boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
             }}
           >
+             <Row gutter={16}>
+              <Col xs={24} md={8}>
+                <Form.Item label="Giảm Giá">
+                  <InputNumber
+                    value={discount}
+                    onChange={setDiscount}
+                    min={0}
+                    formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                    parser={(value) => value.replace(/\$\s?|(,*)/g, '')}
+                    style={{ width: '100%' }}
+                    size="large"
+                    placeholder="Nhập số tiền giảm giá"
+                  />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={8}>
+                <Form.Item label="Phí Vận Chuyển">
+                  <InputNumber
+                    value={shipping}
+                    onChange={setShipping}
+                    min={0}
+                    formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                    parser={(value) => value.replace(/\$\s?|(,*)/g, '')}
+                    style={{ width: '100%' }}
+                    size="large"
+                    placeholder="Nhập phí vận chuyển"
+                  />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={8}>
+                <Form.Item label="Tiền Cọc">
+                  <InputNumber
+                    value={deposit}
+                    onChange={setDeposit}
+                    min={0}
+                    formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                    parser={(value) => value.replace(/\$\s?|(,*)/g, '')}
+                    style={{ width: '100%' }}
+                    size="large"
+                    placeholder="Nhập số tiền cọc"
+                  />
+                </Form.Item>
+              </Col>
+            </Row>
+
             <Row gutter={16} style={{ marginBottom: 24 }}>
               <Col xs={24} md={8}>
                 <Statistic
@@ -628,47 +934,17 @@ const CreateOrderWholesale = () => {
               </Col>
               <Col xs={24} md={8}>
                 <Statistic
-                  title="Lợi Nhuận"
-                  value={totalProfit}
+                  title="Còn Phải Trả"
+                  value={remaining}
                   precision={0}
                   suffix="₫"
-                  valueStyle={{ color: totalProfit >= 0 ? '#52c41a' : '#ff4d4f', fontWeight: 'bold' }}
+                  valueStyle={{ color: remaining > 0 ? '#ff4d4f' : '#52c41a', fontWeight: 'bold' }}
                   formatter={(value) => formatCurrency(value)}
                 />
               </Col>
             </Row>
 
-            <Row gutter={16}>
-              <Col xs={24} md={12}>
-                <Form.Item label="Giảm Giá">
-                  <InputNumber
-                    value={discount}
-                    onChange={setDiscount}
-                    min={0}
-                    formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                    parser={(value) => value.replace(/\$\s?|(,*)/g, '')}
-                    style={{ width: '100%' }}
-                    size="large"
-                    placeholder="Nhập số tiền giảm giá"
-                  />
-                </Form.Item>
-              </Col>
-              <Col xs={24} md={12}>
-                <Form.Item label="Phí Vận Chuyển">
-                  <InputNumber
-                    value={shipping}
-                    onChange={setShipping}
-                    min={0}
-                    formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                    parser={(value) => value.replace(/\$\s?|(,*)/g, '')}
-                    style={{ width: '100%' }}
-                    size="large"
-                    placeholder="Nhập phí vận chuyển"
-                  />
-                </Form.Item>
-              </Col>
-            </Row>
-
+           
             <Divider />
 
             <div style={{ display: 'flex', gap: 16, justifyContent: 'flex-end' }}>
@@ -678,11 +954,16 @@ const CreateOrderWholesale = () => {
                 onClick={() => {
                   setCustomerName('');
                   setCustomerPhone('');
+                  setCustomerAddress('');
+                  setSelectedCustomer(null);
+                  setCustomerPriceHistory({});
+                  setSaveCustomer(true);
+                  setDeliveryDate(null);
                   setProductForms([]);
                   setShowForms(false);
-                  setProductCount('');
                   setDiscount(0);
                   setShipping(0);
+                  setDeposit(0);
                   mainForm.resetFields();
                 }}
               >
@@ -704,6 +985,148 @@ const CreateOrderWholesale = () => {
           </Card>
         )}
 
+        {/* Customer Selection Modal */}
+        <Modal
+          title={
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <TeamOutlined style={{ color: '#007A33' }} />
+              <span>Chọn Khách Hàng</span>
+            </div>
+          }
+          open={showCustomerModal}
+          onCancel={() => {
+            setShowCustomerModal(false);
+            setCustomerSearch('');
+          }}
+          footer={null}
+          width={700}
+          centered
+        >
+          <div style={{ marginBottom: 16 }}>
+            <Input
+              prefix={<UserOutlined style={{ color: '#999' }} />}
+              placeholder="Tìm kiếm khách hàng theo tên, số điện thoại..."
+              value={customerSearch}
+              onChange={(e) => setCustomerSearch(e.target.value)}
+              size="large"
+              allowClear
+            />
+          </div>
+
+          <div style={{ maxHeight: 400, overflow: 'auto' }}>
+            {customers
+              .filter(c => 
+                c.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
+                (c.phone && c.phone.includes(customerSearch))
+              )
+              .length > 0 ? (
+              <List
+                dataSource={customers.filter(c => 
+                  c.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
+                  (c.phone && c.phone.includes(customerSearch))
+                )}
+                renderItem={(customer) => (
+                  <List.Item
+                    style={{ 
+                      cursor: 'pointer',
+                      padding: '16px',
+                      borderRadius: 8,
+                      marginBottom: 8,
+                      border: '1px solid #f0f0f0',
+                      transition: 'all 0.3s'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = '#f0f9ff';
+                      e.currentTarget.style.borderColor = '#007A33';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'white';
+                      e.currentTarget.style.borderColor = '#f0f0f0';
+                    }}
+                    onClick={() => {
+                      setSelectedCustomer(customer);
+                      setCustomerName(customer.name);
+                      setCustomerPhone(customer.phone || '');
+                      setCustomerAddress(customer.address || '');
+                      setShowCustomerModal(false);
+                      setCustomerSearch('');
+                      
+                      // Load customer's price history from previous orders
+                      loadCustomerPriceHistory(customer.id, customer.name);
+                      
+                      message.success(`Đã chọn khách hàng: ${customer.name}`);
+                    }}
+                  >
+                    <List.Item.Meta
+                      avatar={
+                        <div style={{
+                          width: 48,
+                          height: 48,
+                          borderRadius: '50%',
+                          background: '#007A33',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: 'white',
+                          fontSize: 20,
+                          fontWeight: 'bold'
+                        }}>
+                          {customer.name.charAt(0).toUpperCase()}
+                        </div>
+                      }
+                      title={
+                        <div style={{ fontSize: 16, fontWeight: 600, color: '#333' }}>
+                          {customer.name}
+                        </div>
+                      }
+                      description={
+                        <div style={{ color: '#666' }}>
+                          <div><PhoneOutlined /> {customer.phone || 'Chưa có SĐT'}</div>
+                          <div style={{ marginTop: 4 }}>
+                            <EnvironmentOutlined /> {customer.address || 'Chưa có địa chỉ'}
+                          </div>
+                        </div>
+                      }
+                    />
+                  </List.Item>
+                )}
+              />
+            ) : (
+              <div style={{ 
+                textAlign: 'center', 
+                padding: '60px 20px',
+                color: '#999'
+              }}>
+                <UserOutlined style={{ fontSize: 48, marginBottom: 16, opacity: 0.3 }} />
+                <div style={{ fontSize: 16 }}>Không tìm thấy khách hàng nào</div>
+                {customerSearch && (
+                  <div style={{ marginTop: 8, fontSize: 14 }}>
+                    Không có kết quả cho "{customerSearch}"
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div style={{ 
+            marginTop: 16, 
+            paddingTop: 16, 
+            borderTop: '1px solid #f0f0f0',
+            display: 'flex',
+            justifyContent: 'flex-end',
+            gap: 8
+          }}>
+            <Button
+              onClick={() => {
+                setShowCustomerModal(false);
+                setCustomerSearch('');
+              }}
+            >
+              Hủy
+            </Button>
+          </div>
+        </Modal>
+
         {/* Success Modal */}
         <Modal
           open={showSuccessModal}
@@ -716,7 +1139,7 @@ const CreateOrderWholesale = () => {
             <CheckCircleOutlined style={{ fontSize: 64, color: '#52c41a', marginBottom: 16 }} />
             <h2 style={{ color: '#007A33', marginBottom: 8 }}>Tạo Đơn Hàng Thành Công!</h2>
             <p style={{ fontSize: 16, color: '#666', marginBottom: 24 }}>
-              Đơn hàng bán lẻ với <strong>{createdProductCount} sản phẩm</strong> đã được tạo thành công.
+              Đơn hàng bán sỉ với <strong>{createdProductCount} sản phẩm</strong> đã được tạo thành công.
             </p>
             <Space size="middle" direction="vertical" style={{ width: '100%' }}>
               <Space size="middle">
@@ -740,7 +1163,7 @@ const CreateOrderWholesale = () => {
                   size="large"
                   icon={<PrinterOutlined />}
                   onClick={() => {
-                    printRetailInvoice(lastCreatedOrder);
+                    printWholesaleInvoice(lastCreatedOrder);
                     message.success('Đang mở cửa sổ in hóa đơn...');
                   }}
                   style={{ 

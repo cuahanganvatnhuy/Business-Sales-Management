@@ -35,7 +35,8 @@ import {
   ShopOutlined,
   CheckCircleOutlined,
   DollarOutlined,
-  PrinterOutlined
+  PrinterOutlined,
+  TeamOutlined
 } from '@ant-design/icons';
 import { formatCurrency } from '../../utils/format';
 import { printRetailInvoice } from '../../utils/printInvoice';
@@ -357,6 +358,47 @@ const CreateOrderRetail = () => {
             </div>
           </div>
         </Card>
+
+        {/* Order Type Tabs */}
+        <div style={{ marginBottom: 24 }}>
+          <Space size="middle">
+            <Button
+              icon={<ShoppingOutlined />}
+              size="large"
+              onClick={() => navigate('/orders/create/ecommerce')}
+              style={{
+                borderColor: '#d9d9d9',
+                background: 'white',
+                color: '#666'
+              }}
+            >
+              Đơn TMĐT
+            </Button>
+            <Button
+              icon={<ShopOutlined />}
+              size="large"
+              type="primary"
+              style={{
+                background: '#007A33',
+                borderColor: '#007A33'
+              }}
+            >
+              Đơn Bán Lẻ
+            </Button>
+            <Button
+              icon={<TeamOutlined />}
+              size="large"
+              onClick={() => navigate('/orders/create/wholesale')}
+              style={{
+                borderColor: '#d9d9d9',
+                background: 'white',
+                color: '#666'
+              }}
+            >
+              Đơn Bán Sỉ
+            </Button>
+          </Space>
+        </div>
 
         {/* Main Form */}
         <Card 
