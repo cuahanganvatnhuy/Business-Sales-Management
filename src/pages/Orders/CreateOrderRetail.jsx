@@ -81,6 +81,7 @@ const CreateOrderRetail = () => {
 
   // Success modal
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [createdProductCount, setCreatedProductCount] = useState(0);
 
   // Load selling products
   useEffect(() => {
@@ -285,6 +286,9 @@ const CreateOrderRetail = () => {
       // Save to Firebase
       const ordersRef = ref(database, 'retailSalesOrders');
       await push(ordersRef, retailOrder);
+
+      // Save product count before reset
+      setCreatedProductCount(items.length);
 
       // Reset form
       setCustomerName('');
@@ -678,7 +682,7 @@ const CreateOrderRetail = () => {
             <CheckCircleOutlined style={{ fontSize: 64, color: '#52c41a', marginBottom: 16 }} />
             <h2 style={{ color: '#007A33', marginBottom: 8 }}>Tạo Đơn Hàng Thành Công!</h2>
             <p style={{ fontSize: 16, color: '#666', marginBottom: 24 }}>
-              Đơn hàng bán lẻ với <strong>{productForms.length} sản phẩm</strong> đã được tạo thành công.
+              Đơn hàng bán lẻ với <strong>{createdProductCount} sản phẩm</strong> đã được tạo thành công.
             </p>
             <Space size="middle">
               <Button
