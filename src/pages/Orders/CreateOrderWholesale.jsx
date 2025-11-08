@@ -26,8 +26,9 @@ import {
   ShoppingOutlined,
   UserOutlined,
   PhoneOutlined,
+  EnvironmentOutlined,
   CalendarOutlined,
-  ClockCircleOutlined,
+  TeamOutlined,
   PlusOutlined,
   DeleteOutlined,
   SaveOutlined,
@@ -56,30 +57,33 @@ const platforms = [
   { value: 'other', label: '🔧 Khác' }
 ];
 
-const CreateOrderRetail = () => {
+const CreateOrderWholesale = () => {
   const navigate = useNavigate();
   const [mainForm] = Form.useForm();
 
   // State
   const [sellingProducts, setSellingProducts] = useState([]);
+  const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(false);
+
+  // Customer selection
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [showCustomerModal, setShowCustomerModal] = useState(false);
 
   // Customer & Order info
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
+  const [customerAddress, setCustomerAddress] = useState('');
   const [selectedDate, setSelectedDate] = useState(dayjs());
-  const [selectedTime, setSelectedTime] = useState(dayjs());
-  const [salesChannel, setSalesChannel] = useState('offline');
-  const [selectedPlatform, setSelectedPlatform] = useState(null);
+  const [deliveryDate, setDeliveryDate] = useState(null);
 
-  // Product forms
-  const [productCount, setProductCount] = useState('');
+  // Product forms - each with wholesale price
   const [productForms, setProductForms] = useState([]);
-  const [showForms, setShowForms] = useState(false);
 
   // Order totals
   const [discount, setDiscount] = useState(0);
   const [shipping, setShipping] = useState(0);
+  const [deposit, setDeposit] = useState(0);
 
   // Success modal
   const [showSuccessModal, setShowSuccessModal] = useState(false);
@@ -100,6 +104,24 @@ const CreateOrderRetail = () => {
             ...data[key]
           }));
         setSellingProducts(productsArray);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Load customers
+  useEffect(() => {
+    const customersRef = ref(database, 'wholesaleCustomers');
+    
+    const unsubscribe = onValue(customersRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const customersArray = Object.keys(data).map(key => ({
+          id: key,
+          ...data[key]
+        }));
+        setCustomers(customersArray);
       }
     });
 
@@ -352,8 +374,8 @@ const CreateOrderRetail = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <ShoppingOutlined style={{ fontSize: 32, color: '#007A33' }} />
             <div>
-              <h1 style={{ margin: 0, fontSize: 24, color: '#007A33' }}>Tạo Đơn Hàng Bán Lẻ</h1>
-              <p style={{ margin: 0, color: '#666' }}>Tạo đơn hàng bán lẻ trực tiếp hoặc từ sàn TMĐT</p>
+              <h1 style={{ margin: 0, fontSize: 24, color: '#007A33' }}>Tạo Đơn Hàng Bán Sỉ</h1>
+              <p style={{ margin: 0, color: '#666' }}>Tạo đơn hàng bán sỉ với giá ưu đãi</p>
             </div>
           </div>
         </Card>
@@ -677,7 +699,7 @@ const CreateOrderRetail = () => {
                   minWidth: 200
                 }}
               >
-                Tạo Đơn Hàng Bán Lẻ
+                Tạo Đơn Hàng Bán Sỉ
               </Button>
             </div>
           </Card>
@@ -738,4 +760,4 @@ const CreateOrderRetail = () => {
   );
 };
 
-export default CreateOrderRetail;
+export default CreateOrderWholesale;
