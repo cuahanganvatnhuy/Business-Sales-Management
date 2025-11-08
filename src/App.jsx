@@ -6,6 +6,10 @@ import { AuthProvider } from './contexts/AuthContext';
 import PrivateRoute from './components/PrivateRoute';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
+import { AddProduct, ManageProducts } from './pages/Products';
+import Categories from './pages/Categories';
+import SellingProducts from './pages/SellingProducts';
+import { CreateOrderTMDT } from './pages/Orders';
 import MainLayout from './components/Layout/MainLayout';
 import './App.css';
 
@@ -26,6 +30,26 @@ function App() {
             }>
               <Route index element={<Navigate to="/dashboard" replace />} />
               <Route path="dashboard" element={<Dashboard />} />
+              
+              {/* Products Routes */}
+              <Route path="products">
+                <Route index element={<Navigate to="manage" replace />} />
+                <Route path="add" element={<AddProduct />} />
+                <Route path="manage" element={<ManageProducts />} />
+              </Route>
+              
+              {/* Categories Route */}
+              <Route path="categories" element={<Categories />} />
+              
+              {/* Selling Products Route */}
+              <Route path="selling-products" element={<SellingProducts />} />
+              
+              {/* Orders Routes */}
+              <Route path="orders/create">
+                <Route path="ecommerce" element={<CreateOrderTMDT />} />
+                {/* Retail và Wholesale sẽ tạo sau */}
+              </Route>
+              
               {/* Sẽ thêm routes khác sau */}
             </Route>
             

@@ -53,7 +53,7 @@ const MainLayout = () => {
           label: 'Quản Lý Sản Phẩm',
         },
         {
-          key: '/products/categories',
+          key: '/categories',
           icon: <i className="fas fa-tags" />,
           label: 'Danh Mục Sản Phẩm',
         },
@@ -85,33 +85,6 @@ const MainLayout = () => {
           label: 'Đơn Hàng Bán Sỉ',
         },
       ]
-    },
-    // {
-    //   key: 'sales-orders',
-    //   icon: <i className="fas fa-shopping-bag" />,
-    //   label: 'Đơn Hàng Bán',
-    //   children: [
-    //     {
-    //       key: '/sales-orders/ecommerce',
-    //       icon: <ShoppingCartOutlined />,
-    //       label: 'TMĐT Bán',
-    //     },
-    //     {
-    //       key: '/sales-orders/retail',
-    //       icon: <ShopOutlined />,
-    //       label: 'Bán Lẻ',
-    //     },
-    //     {
-    //       key: '/sales-orders/wholesale',
-    //       icon: <i className="fas fa-warehouse" />,
-    //       label: 'Bán Sỉ',
-    //     },
-    //   ]
-    // },
-    {
-      key: '/orders/management',
-      icon: <i className="fas fa-tasks" />,
-      label: 'Quản Lý Đơn Hàng',
     },
     {
       key: '/sales-orders/management',
