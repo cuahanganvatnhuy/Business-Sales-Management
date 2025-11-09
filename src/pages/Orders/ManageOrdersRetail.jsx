@@ -246,6 +246,154 @@ const ManageOrdersRetail = () => {
     }
   };
 
+  // Generate invoice HTML for a single order
+  const generateInvoiceHTML = (record) => {
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Hóa Đơn - ${record.orderId}</title>
+        <style>
+          body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+          }
+          .header {
+            text-align: center;
+            border-bottom: 2px solid #007A33;
+            padding-bottom: 20px;
+            margin-bottom: 20px;
+          }
+          .header h1 {
+            color: #007A33;
+            margin: 0;
+          }
+          .info-section {
+            margin-bottom: 20px;
+          }
+          .info-row {
+            display: flex;
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+          }
+          .info-label {
+            font-weight: bold;
+            width: 150px;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+          }
+          th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+          }
+          th {
+            background-color: #007A33;
+            color: white;
+          }
+          .total-row {
+            font-weight: bold;
+            background-color: #f5f5f5;
+          }
+          .footer {
+            margin-top: 40px;
+            text-align: center;
+            color: #666;
+          }
+          .page-break {
+            page-break-after: always;
+          }
+          @media print {
+            .print-button {
+              display: none;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>HÓA ĐƠN BÁN LẺ</h1>
+          <p>Mã đơn: ${record.orderId}</p>
+        </div>
+        
+        <div class="info-section">
+          <div class="info-row">
+            <div class="info-label">Khách hàng:</div>
+            <div>${record.customerName || 'Khách lẻ'}</div>
+          </div>
+          <div class="info-row">
+            <div class="info-label">Số điện thoại:</div>
+            <div>${record.customerPhone || 'N/A'}</div>
+          </div>
+          <div class="info-row">
+            <div class="info-label">Ngày đặt:</div>
+            <div>${dayjs(record.orderDate).format('DD/MM/YYYY')}</div>
+          </div>
+          <div class="info-row">
+            <div class="info-label">Cửa hàng:</div>
+            <div>${record.storeName || 'N/A'}</div>
+          </div>
+        </div>
+        
+        <table>
+          <thead>
+            <tr>
+              <th>STT</th>
+              <th>Sản phẩm</th>
+              <th>SKU</th>
+              <th>Số lượng</th>
+              <th>Đơn vị</th>
+              <th>Đơn giá</th>
+              <th>Thành tiền</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${record.items && record.items.length > 0 ? 
+              record.items.map((item, index) => `
+                <tr>
+                  <td>${index + 1}</td>
+                  <td>${item.productName}</td>
+                  <td>${item.sku}</td>
+                  <td>${item.quantity}</td>
+                  <td>${item.unit || 'kg'}</td>
+                  <td>${formatCurrency(item.sellingPrice)}</td>
+                  <td>${formatCurrency(item.subtotal)}</td>
+                </tr>
+              `).join('') 
+              : `
+                <tr>
+                  <td>1</td>
+                  <td>${record.productName || 'N/A'}</td>
+                  <td>${record.sku || 'N/A'}</td>
+                  <td>${record.quantity || 0}</td>
+                  <td>${record.unit || 'kg'}</td>
+                  <td>-</td>
+                  <td>${formatCurrency(record.subtotal || 0)}</td>
+                </tr>
+              `
+            }
+            <tr class="total-row">
+              <td colspan="6" style="text-align: right;">Tổng cộng:</td>
+              <td>${formatCurrency(record.subtotal)}</td>
+            </tr>
+          </tbody>
+        </table>
+        
+        <div class="footer">
+          <p>Cảm ơn quý khách đã mua hàng!</p>
+          <p>In lúc: ${dayjs().format('DD/MM/YYYY HH:mm')}</p>
+        </div>
+      </body>
+      </html>
+    `;
+  };
+
   // Print Invoice
   const handlePrintInvoice = (record) => {
     // Create print window
@@ -417,6 +565,373 @@ const ManageOrdersRetail = () => {
     };
     
     message.success('Đã mở cửa sổ in hóa đơn!');
+  };
+
+  // Print selected invoices
+  const handlePrintSelected = () => {
+    if (selectedRowKeys.length === 0) {
+      message.warning('Vui lòng chọn ít nhất 1 đơn hàng để in!');
+      return;
+    }
+
+    const selectedOrders = orders.filter(order => selectedRowKeys.includes(order.id));
+    const printWindow = window.open('', '_blank', 'width=800,height=600');
+    
+    // Generate combined HTML for all selected orders
+    const invoicesHTML = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Hóa Đơn - ${selectedOrders.length} đơn</title>
+        <style>
+          body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+          }
+          .header {
+            text-align: center;
+            border-bottom: 2px solid #007A33;
+            padding-bottom: 20px;
+            margin-bottom: 20px;
+          }
+          .header h1 {
+            color: #007A33;
+            margin: 0;
+          }
+          .info-section {
+            margin-bottom: 20px;
+          }
+          .info-row {
+            display: flex;
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+          }
+          .info-label {
+            font-weight: bold;
+            width: 150px;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+          }
+          th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+          }
+          th {
+            background-color: #007A33;
+            color: white;
+          }
+          .total-row {
+            font-weight: bold;
+            background-color: #f5f5f5;
+          }
+          .footer {
+            margin-top: 40px;
+            text-align: center;
+            color: #666;
+          }
+          .page-break {
+            page-break-after: always;
+          }
+          .print-button {
+            background-color: #007A33;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 20px 0;
+          }
+          @media print {
+            .print-button {
+              display: none;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        ${selectedOrders.map((record, index) => `
+          <div>
+            <div class="header">
+              <h1>HÓA ĐƠN BÁN LẺ</h1>
+              <p>Mã đơn: ${record.orderId}</p>
+            </div>
+            
+            <div class="info-section">
+              <div class="info-row">
+                <div class="info-label">Khách hàng:</div>
+                <div>${record.customerName || 'Khách lẻ'}</div>
+              </div>
+              <div class="info-row">
+                <div class="info-label">Số điện thoại:</div>
+                <div>${record.customerPhone || 'N/A'}</div>
+              </div>
+              <div class="info-row">
+                <div class="info-label">Ngày đặt:</div>
+                <div>${dayjs(record.orderDate).format('DD/MM/YYYY')}</div>
+              </div>
+              <div class="info-row">
+                <div class="info-label">Cửa hàng:</div>
+                <div>${record.storeName || 'N/A'}</div>
+              </div>
+            </div>
+            
+            <table>
+              <thead>
+                <tr>
+                  <th>STT</th>
+                  <th>Sản phẩm</th>
+                  <th>SKU</th>
+                  <th>Số lượng</th>
+                  <th>Đơn vị</th>
+                  <th>Đơn giá</th>
+                  <th>Thành tiền</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${record.items && record.items.length > 0 ? 
+                  record.items.map((item, idx) => `
+                    <tr>
+                      <td>${idx + 1}</td>
+                      <td>${item.productName}</td>
+                      <td>${item.sku}</td>
+                      <td>${item.quantity}</td>
+                      <td>${item.unit || 'kg'}</td>
+                      <td>${formatCurrency(item.sellingPrice)}</td>
+                      <td>${formatCurrency(item.subtotal)}</td>
+                    </tr>
+                  `).join('') 
+                  : `
+                    <tr>
+                      <td>1</td>
+                      <td>${record.productName || 'N/A'}</td>
+                      <td>${record.sku || 'N/A'}</td>
+                      <td>${record.quantity || 0}</td>
+                      <td>${record.unit || 'kg'}</td>
+                      <td>-</td>
+                      <td>${formatCurrency(record.subtotal || 0)}</td>
+                    </tr>
+                  `
+                }
+                <tr class="total-row">
+                  <td colspan="6" style="text-align: right;">Tổng cộng:</td>
+                  <td>${formatCurrency(record.subtotal)}</td>
+                </tr>
+              </tbody>
+            </table>
+            
+            <div class="footer">
+              <p>Cảm ơn quý khách đã mua hàng!</p>
+              <p>In lúc: ${dayjs().format('DD/MM/YYYY HH:mm')}</p>
+            </div>
+          </div>
+          ${index < selectedOrders.length - 1 ? '<div class="page-break"></div>' : ''}
+        `).join('')}
+        
+        <button class="print-button" onclick="window.print()">In tất cả</button>
+      </body>
+      </html>
+    `;
+    
+    printWindow.document.write(invoicesHTML);
+    printWindow.document.close();
+    
+    printWindow.onload = function() {
+      setTimeout(() => {
+        printWindow.print();
+      }, 250);
+    };
+    
+    message.success(`Đã mở cửa sổ in ${selectedOrders.length} hóa đơn!`);
+  };
+
+  // Print all filtered invoices
+  const handlePrintAll = () => {
+    if (filteredOrders.length === 0) {
+      message.warning('Không có đơn hàng nào để in!');
+      return;
+    }
+
+    const printWindow = window.open('', '_blank', 'width=800,height=600');
+    
+    // Generate combined HTML for all filtered orders
+    const invoicesHTML = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Hóa Đơn - ${filteredOrders.length} đơn</title>
+        <style>
+          body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+          }
+          .header {
+            text-align: center;
+            border-bottom: 2px solid #007A33;
+            padding-bottom: 20px;
+            margin-bottom: 20px;
+          }
+          .header h1 {
+            color: #007A33;
+            margin: 0;
+          }
+          .info-section {
+            margin-bottom: 20px;
+          }
+          .info-row {
+            display: flex;
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+          }
+          .info-label {
+            font-weight: bold;
+            width: 150px;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+          }
+          th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+          }
+          th {
+            background-color: #007A33;
+            color: white;
+          }
+          .total-row {
+            font-weight: bold;
+            background-color: #f5f5f5;
+          }
+          .footer {
+            margin-top: 40px;
+            text-align: center;
+            color: #666;
+          }
+          .page-break {
+            page-break-after: always;
+          }
+          .print-button {
+            background-color: #007A33;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 20px 0;
+          }
+          @media print {
+            .print-button {
+              display: none;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        ${filteredOrders.map((record, index) => `
+          <div>
+            <div class="header">
+              <h1>HÓA ĐƠN BÁN LẺ</h1>
+              <p>Mã đơn: ${record.orderId}</p>
+            </div>
+            
+            <div class="info-section">
+              <div class="info-row">
+                <div class="info-label">Khách hàng:</div>
+                <div>${record.customerName || 'Khách lẻ'}</div>
+              </div>
+              <div class="info-row">
+                <div class="info-label">Số điện thoại:</div>
+                <div>${record.customerPhone || 'N/A'}</div>
+              </div>
+              <div class="info-row">
+                <div class="info-label">Ngày đặt:</div>
+                <div>${dayjs(record.orderDate).format('DD/MM/YYYY')}</div>
+              </div>
+              <div class="info-row">
+                <div class="info-label">Cửa hàng:</div>
+                <div>${record.storeName || 'N/A'}</div>
+              </div>
+            </div>
+            
+            <table>
+              <thead>
+                <tr>
+                  <th>STT</th>
+                  <th>Sản phẩm</th>
+                  <th>SKU</th>
+                  <th>Số lượng</th>
+                  <th>Đơn vị</th>
+                  <th>Đơn giá</th>
+                  <th>Thành tiền</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${record.items && record.items.length > 0 ? 
+                  record.items.map((item, idx) => `
+                    <tr>
+                      <td>${idx + 1}</td>
+                      <td>${item.productName}</td>
+                      <td>${item.sku}</td>
+                      <td>${item.quantity}</td>
+                      <td>${item.unit || 'kg'}</td>
+                      <td>${formatCurrency(item.sellingPrice)}</td>
+                      <td>${formatCurrency(item.subtotal)}</td>
+                    </tr>
+                  `).join('') 
+                  : `
+                    <tr>
+                      <td>1</td>
+                      <td>${record.productName || 'N/A'}</td>
+                      <td>${record.sku || 'N/A'}</td>
+                      <td>${record.quantity || 0}</td>
+                      <td>${record.unit || 'kg'}</td>
+                      <td>-</td>
+                      <td>${formatCurrency(record.subtotal || 0)}</td>
+                    </tr>
+                  `
+                }
+                <tr class="total-row">
+                  <td colspan="6" style="text-align: right;">Tổng cộng:</td>
+                  <td>${formatCurrency(record.subtotal)}</td>
+                </tr>
+              </tbody>
+            </table>
+            
+            <div class="footer">
+              <p>Cảm ơn quý khách đã mua hàng!</p>
+              <p>In lúc: ${dayjs().format('DD/MM/YYYY HH:mm')}</p>
+            </div>
+          </div>
+          ${index < filteredOrders.length - 1 ? '<div class="page-break"></div>' : ''}
+        `).join('')}
+        
+        <button class="print-button" onclick="window.print()">In tất cả</button>
+      </body>
+      </html>
+    `;
+    
+    printWindow.document.write(invoicesHTML);
+    printWindow.document.close();
+    
+    printWindow.onload = function() {
+      setTimeout(() => {
+        printWindow.print();
+      }, 250);
+    };
+    
+    message.success(`Đã mở cửa sổ in ${filteredOrders.length} hóa đơn!`);
   };
 
   // Export to Excel
@@ -808,6 +1323,24 @@ const ManageOrdersRetail = () => {
         title={<><ShopOutlined /> Danh Sách Đơn Hàng Lẻ</>}
         extra={
           <Space>
+            <Button
+              type="primary"
+              icon={<PrinterOutlined />}
+              onClick={handlePrintSelected}
+              disabled={selectedRowKeys.length === 0}
+              style={{ background: '#007A33', borderColor: '#007A33' }}
+            >
+              In Đã Chọn ({selectedRowKeys.length})
+            </Button>
+            <Button
+              type="primary"
+              icon={<PrinterOutlined />}
+              onClick={handlePrintAll}
+              disabled={filteredOrders.length === 0}
+              style={{ background: '#52c41a', borderColor: '#52c41a' }}
+            >
+              In Tất Cả
+            </Button>
             <Popconfirm
               title={`Xóa ${selectedRowKeys.length} đơn hàng đã chọn?`}
               description="Bạn có chắc chắn muốn xóa các đơn hàng đã chọn không?"
