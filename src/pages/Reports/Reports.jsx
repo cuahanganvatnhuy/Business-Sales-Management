@@ -9,14 +9,11 @@ import {
 import {
   BarChartOutlined, GlobalOutlined, ShopOutlined, ShoppingCartOutlined,
   DollarOutlined, LineChartOutlined, TrophyOutlined, TeamOutlined,
-  UserAddOutlined, UserCheckOutlined, ShoppingOutlined, BoxPlotOutlined,
+  UserAddOutlined, UserOutlined, ShoppingOutlined, BoxPlotOutlined,
   FileExcelOutlined
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
-import isBetween from 'dayjs/plugin/isBetween';
 import * as XLSX from 'xlsx';
-
-dayjs.extend(isBetween);
 
 const { RangePicker } = DatePicker;
 const { Option } = Select;
@@ -64,7 +61,7 @@ const Reports = () => {
       if (dateRange && dateRange[0] && dateRange[1]) {
         filteredOrders = filteredOrders.filter(order => {
           const orderDate = dayjs(order.orderDate || order.createdAt);
-          return orderDate.isBetween(dateRange[0], dateRange[1], 'day', '[]');
+          return (orderDate.isAfter(dateRange[0].subtract(1, 'day')) && orderDate.isBefore(dateRange[1].add(1, 'day')));
         });
       }
       if (reportType === 'store' && selectedStoreId) {
@@ -78,14 +75,25 @@ const Reports = () => {
 
       const productSales = {};
       filteredOrders.forEach(order => {
+        // Skip orders without product info
+        if (!order.productName && !order.productId) return;
+        
         const productId = order.productId || order.productName;
         if (!productSales[productId]) {
-          productSales[productId] = { productName: order.productName, sku: order.sku, quantity: 0, revenue: 0 };
+          productSales[productId] = { 
+            productName: order.productName || 'N/A', 
+            sku: order.sku || 'N/A', 
+            quantity: 0, 
+            revenue: 0 
+          };
         }
         productSales[productId].quantity += order.quantity || 0;
         productSales[productId].revenue += order.subtotal || 0;
       });
-      const topProducts = Object.values(productSales).sort((a, b) => b.revenue - a.revenue).slice(0, 10);
+      const topProducts = Object.values(productSales)
+        .filter(p => p.productName && p.productName !== 'N/A') // Only valid products
+        .sort((a, b) => b.revenue - a.revenue)
+        .slice(0, 10);
 
       const storePerformance = [];
       if (reportType === 'global') {
@@ -288,7 +296,7 @@ const Reports = () => {
           <Card title={<span><TeamOutlined /> Phân Tích Khách Hàng</span>} style={{ marginBottom: 24, borderRadius: 12 }}>
             <Row gutter={16}>
               <Col xs={24} md={8}><Card><Statistic title="KH Mới" value={reportData.customerStats.new} prefix={<UserAddOutlined style={{ color: '#1890ff' }} />} valueStyle={{ color: '#1890ff' }} /></Card></Col>
-              <Col xs={24} md={8}><Card><Statistic title="KH Quay Lại" value={reportData.customerStats.returning} prefix={<UserCheckOutlined style={{ color: '#52c41a' }} />} valueStyle={{ color: '#52c41a' }} /></Card></Col>
+              <Col xs={24} md={8}><Card><Statistic title="KH Quay Lại" value={reportData.customerStats.returning} prefix={<UserOutlined style={{ color: '#52c41a' }} />} valueStyle={{ color: '#52c41a' }} /></Card></Col>
               <Col xs={24} md={8}><Card><Statistic title="GT TB/KH" value={reportData.customerStats.avgValue} prefix={<ShoppingOutlined style={{ color: '#faad14' }} />} valueStyle={{ color: '#faad14' }} formatter={(v) => formatCurrency(v)} /></Card></Col>
             </Row>
           </Card>
