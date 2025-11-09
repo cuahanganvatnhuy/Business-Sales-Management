@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { database } from '../../services/firebase.service';
+import { useStore } from '../../contexts/StoreContext';
 import { ref, onValue, remove } from 'firebase/database';
 import {
   Card,
@@ -42,6 +43,7 @@ const { Option } = Select;
 
 const ManageOrdersRetail = () => {
   const navigate = useNavigate();
+  const { selectedStore, stores } = useStore();
   
   // States
   const [orders, setOrders] = useState([]);
@@ -49,7 +51,7 @@ const ManageOrdersRetail = () => {
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [dateRange, setDateRange] = useState([null, null]);
-  const [storeFilter, setStoreFilter] = useState('all');
+  const [storeFilter, setStoreFilter] = useState('current');
   const [selectedRowKeys, setSelectedRowKeys] = useState([]);
   const [expandedRowKeys, setExpandedRowKeys] = useState([]);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
@@ -138,6 +140,18 @@ const ManageOrdersRetail = () => {
   useEffect(() => {
     let filtered = [...orders];
 
+    // Store filter
+    if (storeFilter === 'current' && selectedStore && selectedStore.id !== 'all') {
+      filtered = filtered.filter(order => order.storeName === selectedStore.name);
+    } else if (storeFilter !== 'all' && storeFilter !== 'current') {
+      // Filter by specific store ID
+      const store = stores.find(s => s.id === storeFilter);
+      if (store) {
+        filtered = filtered.filter(order => order.storeName === store.name);
+      }
+    }
+    // If storeFilter === 'all' OR selectedStore.id === 'all', show all orders (no filter)
+
     // Search filter
     if (searchText) {
       filtered = filtered.filter(order =>
@@ -159,7 +173,7 @@ const ManageOrdersRetail = () => {
     }
 
     setFilteredOrders(filtered);
-  }, [searchText, dateRange, orders]);
+  }, [searchText, dateRange, storeFilter, orders, selectedStore, stores]);
 
   // Quick date filters
   const handleQuickFilter = (type) => {
@@ -183,7 +197,7 @@ const ManageOrdersRetail = () => {
   const handleClearFilters = () => {
     setSearchText('');
     setDateRange([null, null]);
-    setStoreFilter('all');
+    setStoreFilter('current'); // Reset to current store (default)
     message.success('Đã xóa tất cả bộ lọc');
   };
 
@@ -1420,7 +1434,7 @@ const ManageOrdersRetail = () => {
         }}
       >
         <Space style={{ marginBottom: 16, width: '100%' }} direction="vertical">
-          <Row gutter={16}>
+          <Row gutter={[16, 16]}>
             <Col xs={24} md={12}>
               <Input
                 placeholder="Nhập mã đơn hàng, SKU, tên sản phẩm, khách hàng, SĐT..."
@@ -1430,7 +1444,25 @@ const ManageOrdersRetail = () => {
                 allowClear
               />
             </Col>
-            <Col xs={24} md={12}>
+            <Col xs={24} md={6}>
+              <Select
+                placeholder="Lọc theo cửa hàng"
+                value={storeFilter}
+                onChange={setStoreFilter}
+                style={{ width: '100%' }}
+              >
+                <Option value="current">
+                  {selectedStore && selectedStore.id !== 'all' ? `📍 ${selectedStore.name}` : '📍 Cửa hàng hiện tại'}
+                </Option>
+                <Option value="all">🏪 Tất cả cửa hàng</Option>
+                {stores.filter(s => s.id !== selectedStore?.id && selectedStore?.id !== 'all').map(store => (
+                  <Option key={store.id} value={store.id}>
+                    🏪 {store.name}
+                  </Option>
+                ))}
+              </Select>
+            </Col>
+            <Col xs={24} md={6}>
               <Button
                 icon={<CloseCircleOutlined />}
                 onClick={handleClearFilters}

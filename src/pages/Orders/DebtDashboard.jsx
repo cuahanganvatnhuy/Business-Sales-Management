@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { database } from '../../services/firebase.service';
+import { useStore } from '../../contexts/StoreContext';
 import { ref, onValue } from 'firebase/database';
 import {
   Card,
@@ -23,6 +24,7 @@ import dayjs from 'dayjs';
 import { Line, Column, Pie } from '@ant-design/plots';
 
 const DebtDashboard = () => {
+  const { selectedStore } = useStore();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [debtData, setDebtData] = useState({
@@ -51,7 +53,7 @@ const DebtDashboard = () => {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [selectedStore]);
 
   const calculateDebtStats = (ordersData) => {
     const customerMap = {};
@@ -64,6 +66,13 @@ const DebtDashboard = () => {
       const order = ordersData[key];
       
       if (order.orderType === 'wholesale') {
+        // Filter by store
+        if (selectedStore && selectedStore.id !== 'all') {
+          if (order.storeName !== selectedStore.name) {
+            return; // Skip this order
+          }
+        }
+        
         const customerId = order.customerId || order.customerName;
         const subtotal = order.subtotal || 0;
         const deposit = order.deposit || 0;
@@ -147,8 +156,19 @@ const DebtDashboard = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <DollarOutlined style={{ fontSize: 32, color: '#007A33' }} />
           <div>
-            <h1 style={{ margin: 0, fontSize: 24, color: '#007A33' }}>Dashboard Công Nợ</h1>
-            <p style={{ margin: 0, color: '#666' }}>Tổng quan và phân tích công nợ khách hàng</p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <h1 style={{ margin: 0, fontSize: 24, color: '#007A33' }}>Dashboard Công Nợ</h1>
+              {selectedStore && (
+                <Tag color={selectedStore.id === 'all' ? 'blue' : 'green'} style={{ fontSize: '14px', padding: '4px 12px' }}>
+                  {selectedStore.id === 'all' ? '🏪 Toàn Bộ Cửa Hàng' : `📍 ${selectedStore.name}`}
+                </Tag>
+              )}
+            </div>
+            <p style={{ margin: 0, color: '#666' }}>
+              {selectedStore && selectedStore.id === 'all' 
+                ? 'Tổng quan công nợ tất cả cửa hàng' 
+                : `Công nợ cửa hàng: ${selectedStore?.name || ''}`}
+            </p>
           </div>
         </div>
       </Card>

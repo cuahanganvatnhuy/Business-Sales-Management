@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Layout, Menu, Avatar, Dropdown, Space, Radio, Button, Modal } from 'antd';
+import { Layout, Menu, Avatar, Dropdown, Space, Radio, Button, Modal, Card, Spin } from 'antd';
 import {
   DashboardOutlined,
   ShoppingOutlined,
@@ -14,22 +14,52 @@ import {
   BarChartOutlined,
   FileTextOutlined,
   ShopOutlined,
-  DollarOutlined
+  DollarOutlined,
+  PlusOutlined,
+  EnvironmentOutlined
 } from '@ant-design/icons';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { useStore } from '../../contexts/StoreContext';
+import { database } from '../../services/firebase.service';
+import { ref, onValue } from 'firebase/database';
 import './MainLayout.css';
 
 const { Header, Sider, Content } = Layout;
 
 const MainLayout = () => {
   const [collapsed, setCollapsed] = useState(false);
-  const [stores, setStores] = useState([]);
-  const [selectedStoreId, setSelectedStoreId] = useState('all');
   const [storeDropdownVisible, setStoreDropdownVisible] = useState(false);
+  const [storeModalVisible, setStoreModalVisible] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout, isAdmin, isManager } = useAuth();
+  const { selectedStore, selectStore, stores, setStores, switching } = useStore();
+
+  // Load stores from Firebase
+  useEffect(() => {
+    const storesRef = ref(database, 'stores');
+    const unsubscribe = onValue(storesRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const storesArray = Object.keys(data)
+          .map(key => ({ id: key, ...data[key] }))
+          .filter(store => store.status === 'active')
+          .sort((a, b) => a.name.localeCompare(b.name));
+        setStores(storesArray);
+      } else {
+        setStores([]);
+      }
+    });
+    return () => unsubscribe();
+  }, [setStores]);
+
+  // Show store selection modal if no store selected
+  useEffect(() => {
+    if (stores.length > 0 && !selectedStore) {
+      setStoreModalVisible(true);
+    }
+  }, [stores, selectedStore]);
 
   // Menu items cho sidebar - ĐẦY ĐỦ
   const menuItems = [
@@ -120,6 +150,11 @@ const MainLayout = () => {
       ]
     },
     {
+      key: '/stores',
+      icon: <ShopOutlined />,
+      label: 'Quản Lý Cửa Hàng',
+    },
+    {
       key: 'finance',
       icon: <i className="fas fa-coins" />,
       label: 'Quản Lý Tài Chính',
@@ -150,11 +185,6 @@ const MainLayout = () => {
           label: 'Lợi Nhuận Đơn Sỉ',
         },
       ]
-    },
-    {
-      key: '/stores',
-      icon: <ShopOutlined />,
-      label: 'Cửa Hàng',
     },
     {
       key: '/reports',
@@ -210,22 +240,9 @@ const MainLayout = () => {
     });
   }
 
-  // Fetch stores from Firebase
-  useEffect(() => {
-    // Mock data - sau này fetch từ Firebase
-    const mockStores = [
-      { id: '1', name: 'Cửa hàng Góc Cheese Nhỏ', address: 'Q.1' },
-      { id: '2', name: 'cửa hàng test', address: 'Q.2' },
-      { id: '3', name: 'Tạp Hóa Bánh Beo', address: 'Q.3' },
-    ];
-    setStores(mockStores);
-  }, []);
-
   // Get selected store name
   const getSelectedStoreName = () => {
-    if (selectedStoreId === 'all') return 'Tất cả cửa hàng';
-    const store = stores.find(s => s.id === selectedStoreId);
-    return store ? store.name : 'Tất cả cửa hàng';
+    return selectedStore ? selectedStore.name : 'Chọn cửa hàng';
   };
 
   // Store dropdown menu content
@@ -253,14 +270,43 @@ const MainLayout = () => {
       </div>
       
       <Radio.Group 
-        value={selectedStoreId} 
+        value={selectedStore?.id || 'all'} 
         onChange={(e) => {
-          setSelectedStoreId(e.target.value);
+          if (e.target.value === 'all') {
+            // Select "All Stores"
+            selectStore({ id: 'all', name: 'Toàn Bộ Cửa Hàng' }, true);
+          } else {
+            const store = stores.find(s => s.id === e.target.value);
+            if (store) {
+              selectStore(store, true); // Show notification when switching from dropdown
+            }
+          }
           setStoreDropdownVisible(false);
         }}
         style={{ width: '100%' }}
+        disabled={switching}
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {/* Option: Toàn Bộ Cửa Hàng */}
+          <div
+            style={{
+              background: 'rgba(255,255,255,0.1)',
+              padding: '12px',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              transition: 'all 0.3s',
+              border: selectedStore?.id === 'all' ? '2px solid #fbbf24' : '2px solid transparent'
+            }}
+          >
+            <Radio value="all" style={{ width: '100%' }}>
+              <div style={{ color: 'white' }}>
+                <div style={{ fontWeight: 600, fontSize: '14px' }}>🏪 Toàn Bộ Cửa Hàng</div>
+                <div style={{ fontSize: '12px', opacity: 0.8 }}>Xem tất cả dữ liệu</div>
+              </div>
+            </Radio>
+          </div>
+
+          {/* Individual Stores */}
           {stores.map(store => (
             <div
               key={store.id}
@@ -270,7 +316,7 @@ const MainLayout = () => {
                 borderRadius: '6px',
                 cursor: 'pointer',
                 transition: 'all 0.3s',
-                border: selectedStoreId === store.id ? '2px solid #fbbf24' : '2px solid transparent'
+                border: selectedStore?.id === store.id ? '2px solid #fbbf24' : '2px solid transparent'
               }}
             >
               <Radio value={store.id} style={{ width: '100%' }}>
@@ -416,9 +462,13 @@ const MainLayout = () => {
               onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.2)'}
               onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
               >
-                <ShopOutlined style={{ color: 'white', fontSize: '16px' }} />
+                {switching ? (
+                  <Spin size="small" style={{ marginRight: 8 }} />
+                ) : (
+                  <ShopOutlined style={{ color: 'white', fontSize: '16px' }} />
+                )}
                 <span style={{ color: 'white', fontWeight: 500, fontSize: '14px', flex: 1 }}>
-                  {getSelectedStoreName()}
+                  {switching ? 'Đang chuyển...' : getSelectedStoreName()}
                 </span>
               </div>
             </Dropdown>
@@ -460,6 +510,91 @@ const MainLayout = () => {
           <Outlet />
         </Content>
       </Layout>
+
+      {/* Store Selection Modal - Bắt buộc chọn cửa hàng */}
+      <Modal
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <ShopOutlined style={{ fontSize: 24, color: '#007A33' }} />
+            <span style={{ fontSize: 18, fontWeight: 600 }}>Chọn Cửa Hàng</span>
+          </div>
+        }
+        open={storeModalVisible}
+        closable={false}
+        footer={null}
+        width={500}
+        centered
+      >
+        <div style={{ padding: '16px 0' }}>
+          <p style={{ fontSize: 14, color: '#666', marginBottom: 24 }}>
+            Vui lòng chọn cửa hàng để tiếp tục sử dụng hệ thống
+          </p>
+
+          <Radio.Group 
+            value={selectedStore?.id}
+            onChange={(e) => {
+              const store = stores.find(s => s.id === e.target.value);
+              if (store) {
+                selectStore(store, false); // Don't show notification in initial modal
+                setStoreModalVisible(false);
+              }
+            }}
+            style={{ width: '100%' }}
+          >
+            <Space direction="vertical" style={{ width: '100%' }} size={12}>
+              {stores.map(store => (
+                <Card
+                  key={store.id}
+                  hoverable
+                  style={{
+                    border: selectedStore?.id === store.id 
+                      ? '2px solid #007A33' 
+                      : '1px solid #d9d9d9',
+                    background: selectedStore?.id === store.id 
+                      ? '#f6ffed' 
+                      : 'white'
+                  }}
+                >
+                  <Radio value={store.id} style={{ width: '100%' }}>
+                    <div>
+                      <div style={{ 
+                        fontWeight: 600, 
+                        fontSize: 16, 
+                        color: '#007A33',
+                        marginBottom: 4
+                      }}>
+                        {store.name}
+                      </div>
+                      <div style={{ fontSize: 13, color: '#666' }}>
+                        <EnvironmentOutlined style={{ marginRight: 4 }} />
+                        {store.address}
+                      </div>
+                    </div>
+                  </Radio>
+                </Card>
+              ))}
+            </Space>
+          </Radio.Group>
+
+          {stores.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '40px 0' }}>
+              <ShopOutlined style={{ fontSize: 48, color: '#d9d9d9', marginBottom: 16 }} />
+              <p style={{ color: '#999' }}>Chưa có cửa hàng nào</p>
+              <Button 
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={() => {
+                  setStoreModalVisible(false);
+                  navigate('/stores');
+                }}
+                style={{ marginTop: 16 }}
+              >
+                Tạo Cửa Hàng Đầu Tiên
+              </Button>
+            </div>
+          )}
+        </div>
+      </Modal>
     </Layout>
   );
 };

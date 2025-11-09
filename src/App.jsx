@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { ConfigProvider } from 'antd';
 import viVN from 'antd/locale/vi_VN';
 import { AuthProvider } from './contexts/AuthContext';
+import { StoreProvider } from './contexts/StoreContext';
 import PrivateRoute from './components/PrivateRoute';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -10,6 +11,7 @@ import { AddProduct, ManageProducts } from './pages/Products';
 import Categories from './pages/Categories';
 import SellingProducts from './pages/SellingProducts';
 import { CreateOrderTMDT, CreateOrderRetail, CreateOrderWholesale, ManageOrdersTMDT, ManageOrdersRetail, ManageOrdersWholesale, DebtManagement, DebtDashboard } from './pages/Orders';
+import { ManageStores } from './pages/Stores';
 import MainLayout from './components/Layout/MainLayout';
 import './App.css';
 
@@ -17,7 +19,8 @@ function App() {
   return (
     <ConfigProvider locale={viVN}>
       <AuthProvider>
-        <Router>
+        <StoreProvider>
+          <Router>
           <Routes>
             {/* Public Route - Login */}
             <Route path="/login" element={<Login />} />
@@ -60,13 +63,17 @@ function App() {
               <Route path="orders/debt" element={<DebtManagement />} />
               <Route path="orders/debt/dashboard" element={<DebtDashboard />} />
               
+              {/* Stores Route */}
+              <Route path="stores" element={<ManageStores />} />
+              
               {/* Sẽ thêm routes khác sau */}
             </Route>
             
             {/* Redirect mọi route không tồn tại về dashboard */}
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>
-        </Router>
+          </Router>
+        </StoreProvider>
       </AuthProvider>
     </ConfigProvider>
   );

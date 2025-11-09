@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { database } from '../../services/firebase.service';
+import { useStore } from '../../contexts/StoreContext';
 import { ref, onValue, remove } from 'firebase/database';
 import {
   Card,
@@ -42,15 +43,16 @@ const { Option } = Select;
 
 const ManageOrdersTMDT = () => {
   const navigate = useNavigate();
+  const { selectedStore, stores } = useStore();
   
   // States
   const [orders, setOrders] = useState([]);
   const [filteredOrders, setFilteredOrders] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
+  const [storeFilter, setStoreFilter] = useState('current'); // 'current', 'all', or storeId
   const [dateRange, setDateRange] = useState([null, null]);
   const [platformFilter, setPlatformFilter] = useState('all');
-  const [storeFilter, setStoreFilter] = useState('all');
   const [selectedRowKeys, setSelectedRowKeys] = useState([]);
   const [expandedRowKeys, setExpandedRowKeys] = useState([]);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
@@ -90,6 +92,8 @@ const ManageOrdersTMDT = () => {
               orderDate: order.orderDate,
               platform: order.platform,
               otherPlatform: order.otherPlatform,
+              storeName: order.storeName || 'N/A',
+              storeId: order.storeId || null,
               createdAt: order.createdAt,
               updatedAt: order.updatedAt,
               // Aggregated item data
@@ -138,6 +142,18 @@ const ManageOrdersTMDT = () => {
   useEffect(() => {
     let filtered = [...orders];
 
+    // Store filter
+    if (storeFilter === 'current' && selectedStore && selectedStore.id !== 'all') {
+      filtered = filtered.filter(order => order.storeName === selectedStore.name);
+    } else if (storeFilter !== 'all' && storeFilter !== 'current') {
+      // Filter by specific store ID
+      const store = stores.find(s => s.id === storeFilter);
+      if (store) {
+        filtered = filtered.filter(order => order.storeName === store.name);
+      }
+    }
+    // If storeFilter === 'all' OR selectedStore.id === 'all', show all orders (no filter)
+
     // Search filter
     if (searchText) {
       filtered = filtered.filter(order =>
@@ -162,7 +178,7 @@ const ManageOrdersTMDT = () => {
     }
 
     setFilteredOrders(filtered);
-  }, [searchText, dateRange, platformFilter, orders]);
+  }, [searchText, dateRange, platformFilter, storeFilter, orders, selectedStore, stores]);
 
   // Quick date filters
   const handleQuickFilter = (type) => {
@@ -187,7 +203,7 @@ const ManageOrdersTMDT = () => {
     setSearchText('');
     setDateRange([null, null]);
     setPlatformFilter('all');
-    setStoreFilter('all');
+    setStoreFilter('current'); // Reset to current store (default)
     message.success('Đã xóa tất cả bộ lọc');
   };
 
@@ -676,6 +692,17 @@ const ManageOrdersTMDT = () => {
       )
     },
     {
+      title: 'Cửa Hàng',
+      dataIndex: 'storeName',
+      key: 'storeName',
+      width: 150,
+      render: (storeName) => (
+        <Tag color="green" icon={<ShopOutlined />}>
+          {storeName || 'N/A'}
+        </Tag>
+      )
+    },
+    {
       title: 'Ngày Đặt',
       dataIndex: 'orderDate',
       key: 'orderDate',
@@ -727,18 +754,6 @@ const ManageOrdersTMDT = () => {
       render: (amount) => (
         <span style={{ color: '#007A33', fontWeight: 600 }}>
           {formatCurrency(amount || 0)}
-        </span>
-      )
-    },
-    {
-      title: 'Cửa Hàng',
-      dataIndex: 'storeName',
-      key: 'storeName',
-      width: 130,
-      align: 'center',
-      render: (storeName) => (
-        <span style={{ color: '#666' }}>
-          {storeName || 'N/A'}
         </span>
       )
     },
@@ -1046,8 +1061,8 @@ const ManageOrdersTMDT = () => {
         }}
       >
         <Space style={{ marginBottom: 16, width: '100%' }} direction="vertical">
-          <Row gutter={16}>
-            <Col xs={24} md={8}>
+          <Row gutter={[16, 16]}>
+            <Col xs={24} md={12}>
               <Input
                 placeholder="Nhập mã đơn hàng, SKU, tên sản phẩm..."
                 prefix={<SearchOutlined />}
@@ -1056,7 +1071,25 @@ const ManageOrdersTMDT = () => {
                 allowClear
               />
             </Col>
-            <Col xs={24} md={8}>
+            <Col xs={24} md={6}>
+              <Select
+                placeholder="Lọc theo cửa hàng"
+                value={storeFilter}
+                onChange={setStoreFilter}
+                style={{ width: '100%' }}
+              >
+                <Option value="current">
+                  {selectedStore && selectedStore.id !== 'all' ? `📍 ${selectedStore.name}` : '📍 Cửa hàng hiện tại'}
+                </Option>
+                <Option value="all">🏪 Tất cả cửa hàng</Option>
+                {stores.filter(s => s.id !== selectedStore?.id && selectedStore?.id !== 'all').map(store => (
+                  <Option key={store.id} value={store.id}>
+                    🏪 {store.name}
+                  </Option>
+                ))}
+              </Select>
+            </Col>
+            <Col xs={24} md={6}>
               <Select
                 placeholder="Tất cả sàn"
                 value={platformFilter}
@@ -1074,13 +1107,15 @@ const ManageOrdersTMDT = () => {
                 <Option value="other">Khác</Option>
               </Select>
             </Col>
-            <Col xs={24} md={8}>
+          </Row>
+          <Row gutter={16}>
+            <Col xs={24}>
               <Button
                 icon={<CloseCircleOutlined />}
                 onClick={handleClearFilters}
                 block
               >
-                Xóa Bộ Lọc
+                Xóa Tất Cả Bộ Lọc
               </Button>
             </Col>
           </Row>

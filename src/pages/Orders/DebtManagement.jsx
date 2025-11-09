@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { database } from '../../services/firebase.service';
+import { useStore } from '../../contexts/StoreContext';
 import { ref, onValue, push, set } from 'firebase/database';
 import {
   Card,
@@ -41,12 +42,14 @@ const { Option } = Select;
 
 const DebtManagement = () => {
   const navigate = useNavigate();
+  const { selectedStore, stores } = useStore();
   
   // States
   const [customers, setCustomers] = useState([]);
   const [filteredCustomers, setFilteredCustomers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
+  const [storeFilter, setStoreFilter] = useState('current');
   const [statusFilter, setStatusFilter] = useState('all');
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
@@ -108,7 +111,8 @@ const DebtManagement = () => {
             customerMap[customerId].totalRemaining += remaining;
             customerMap[customerId].orders.push({
               id: key,
-              ...order
+              ...order,
+              storeName: order.storeName || 'N/A'
             });
           }
         });
@@ -134,9 +138,65 @@ const DebtManagement = () => {
     return () => unsubscribe();
   }, []);
 
-  // Search and status filter
+  // Search, status, and store filter
   useEffect(() => {
     let filtered = [...customers];
+
+    // Store filter - recalculate totals for each customer based on store
+    if (storeFilter === 'current' && selectedStore && selectedStore.id !== 'all') {
+      filtered = filtered.map(customer => {
+        const storeOrders = customer.orders.filter(order => order.storeName === selectedStore.name);
+        if (storeOrders.length === 0) return null; // Remove customer if no orders from this store
+        
+        const totalOrders = storeOrders.length;
+        const totalAmount = storeOrders.reduce((sum, o) => sum + (o.subtotal || 0), 0);
+        const totalDeposit = storeOrders.reduce((sum, o) => sum + (o.deposit || 0), 0);
+        const totalRemaining = storeOrders.reduce((sum, o) => {
+          const subtotal = o.subtotal || 0;
+          const deposit = o.deposit || 0;
+          const remaining = (o.remainingAmount !== undefined) ? o.remainingAmount : (subtotal - deposit);
+          return sum + remaining;
+        }, 0);
+        
+        return {
+          ...customer,
+          totalOrders,
+          totalAmount,
+          totalDeposit,
+          totalRemaining,
+          debtStatus: totalRemaining === 0 ? 'paid' : totalDeposit > 0 ? 'partial' : 'pending'
+        };
+      }).filter(c => c !== null);
+    } else if (storeFilter !== 'all' && storeFilter !== 'current') {
+      // Filter by specific store ID
+      const store = stores.find(s => s.id === storeFilter);
+      if (store) {
+        filtered = filtered.map(customer => {
+          const storeOrders = customer.orders.filter(order => order.storeName === store.name);
+          if (storeOrders.length === 0) return null;
+          
+          const totalOrders = storeOrders.length;
+          const totalAmount = storeOrders.reduce((sum, o) => sum + (o.subtotal || 0), 0);
+          const totalDeposit = storeOrders.reduce((sum, o) => sum + (o.deposit || 0), 0);
+          const totalRemaining = storeOrders.reduce((sum, o) => {
+            const subtotal = o.subtotal || 0;
+            const deposit = o.deposit || 0;
+            const remaining = (o.remainingAmount !== undefined) ? o.remainingAmount : (subtotal - deposit);
+            return sum + remaining;
+          }, 0);
+          
+          return {
+            ...customer,
+            totalOrders,
+            totalAmount,
+            totalDeposit,
+            totalRemaining,
+            debtStatus: totalRemaining === 0 ? 'paid' : totalDeposit > 0 ? 'partial' : 'pending'
+          };
+        }).filter(c => c !== null);
+      }
+    }
+    // If storeFilter === 'all', use all customers as is
 
     // Search filter
     if (searchText) {
@@ -152,7 +212,7 @@ const DebtManagement = () => {
     }
 
     setFilteredCustomers(filtered);
-  }, [searchText, statusFilter, customers]);
+  }, [searchText, statusFilter, storeFilter, customers, selectedStore, stores]);
 
   // View customer detail
   const handleViewDetail = (record) => {
@@ -771,8 +831,8 @@ const DebtManagement = () => {
           boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
         }}
       >
-        <Row gutter={16} style={{ marginBottom: 16 }}>
-          <Col xs={24} md={16}>
+        <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+          <Col xs={24} md={12}>
             <Input
               placeholder="Tìm theo tên khách hàng hoặc SĐT..."
               prefix={<SearchOutlined />}
@@ -781,17 +841,35 @@ const DebtManagement = () => {
               allowClear
             />
           </Col>
-          <Col xs={24} md={8}>
+          <Col xs={24} md={6}>
             <Select
-              placeholder="Lọc theo trạng thái"
+              placeholder="Cửa hàng"
+              value={storeFilter}
+              onChange={setStoreFilter}
+              style={{ width: '100%' }}
+            >
+              <Option value="current">
+                {selectedStore && selectedStore.id !== 'all' ? `📍 ${selectedStore.name}` : '📍 Hiện tại'}
+              </Option>
+              <Option value="all">🏪 Tất cả</Option>
+              {stores.filter(s => s.id !== selectedStore?.id && selectedStore?.id !== 'all').map(store => (
+                <Option key={store.id} value={store.id}>
+                  🏪 {store.name}
+                </Option>
+              ))}
+            </Select>
+          </Col>
+          <Col xs={24} md={6}>
+            <Select
+              placeholder="Trạng thái"
               value={statusFilter}
               onChange={setStatusFilter}
               style={{ width: '100%' }}
             >
-              <Option value="all">Tất cả trạng thái</Option>
-              <Option value="pending">Chưa thanh toán</Option>
+              <Option value="all">Tất cả TT</Option>
+              <Option value="pending">Chưa TT</Option>
               <Option value="partial">Nợ 1 phần</Option>
-              <Option value="paid">Đã thanh toán</Option>
+              <Option value="paid">Đã TT</Option>
             </Select>
           </Col>
         </Row>

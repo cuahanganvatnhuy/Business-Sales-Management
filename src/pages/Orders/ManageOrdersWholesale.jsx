@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { database } from '../../services/firebase.service';
+import { useStore } from '../../contexts/StoreContext';
 import { ref, onValue, remove, update } from 'firebase/database';
 import {
   Card,
@@ -44,6 +45,7 @@ const { Option } = Select;
 
 const ManageOrdersWholesale = () => {
   const navigate = useNavigate();
+  const { selectedStore, stores } = useStore();
   
   // States
   const [orders, setOrders] = useState([]);
@@ -51,7 +53,7 @@ const ManageOrdersWholesale = () => {
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [dateRange, setDateRange] = useState([null, null]);
-  const [storeFilter, setStoreFilter] = useState('all');
+  const [storeFilter, setStoreFilter] = useState('current');
   const [selectedRowKeys, setSelectedRowKeys] = useState([]);
   const [expandedRowKeys, setExpandedRowKeys] = useState([]);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
@@ -149,6 +151,16 @@ const ManageOrdersWholesale = () => {
   useEffect(() => {
     let filtered = [...orders];
 
+    // Store filter
+    if (storeFilter === 'current' && selectedStore && selectedStore.id !== 'all') {
+      filtered = filtered.filter(order => order.storeName === selectedStore.name);
+    } else if (storeFilter !== 'all' && storeFilter !== 'current') {
+      const store = stores.find(s => s.id === storeFilter);
+      if (store) {
+        filtered = filtered.filter(order => order.storeName === store.name);
+      }
+    }
+
     // Search filter
     if (searchText) {
       filtered = filtered.filter(order =>
@@ -175,7 +187,7 @@ const ManageOrdersWholesale = () => {
     }
 
     setFilteredOrders(filtered);
-  }, [searchText, dateRange, paymentFilter, orders]);
+  }, [searchText, dateRange, paymentFilter, storeFilter, orders, selectedStore, stores]);
 
   // Quick date filters
   const handleQuickFilter = (type) => {
@@ -199,7 +211,7 @@ const ManageOrdersWholesale = () => {
   const handleClearFilters = () => {
     setSearchText('');
     setDateRange([null, null]);
-    setStoreFilter('all');
+    setStoreFilter('current'); // Reset to current store
     setPaymentFilter('all');
     message.success('Đã xóa tất cả bộ lọc');
   };
@@ -1430,7 +1442,7 @@ const ManageOrdersWholesale = () => {
 
       {/* Orders Table */}
       <Card
-        title={<><TeamOutlined /> Danh Sách Đơn Hàng Lẻ</>}
+        title={<><TeamOutlined /> Danh Sách Đơn Hàng Sỉ</>}
         extra={
           <Space>
             <Button
@@ -1500,7 +1512,7 @@ const ManageOrdersWholesale = () => {
         }}
       >
         <Space style={{ marginBottom: 16, width: '100%' }} direction="vertical">
-          <Row gutter={16}>
+          <Row gutter={[16, 16]}>
             <Col xs={24} md={12}>
               <Input
                 placeholder="Nhập mã đơn hàng, SKU, tên sản phẩm, khách hàng, SĐT..."
@@ -1510,20 +1522,38 @@ const ManageOrdersWholesale = () => {
                 allowClear
               />
             </Col>
-            <Col xs={24} md={6}>
+            <Col xs={24} md={4}>
               <Select
-                placeholder="Lọc theo TT thanh toán"
+                placeholder="Cửa hàng"
+                value={storeFilter}
+                onChange={setStoreFilter}
+                style={{ width: '100%' }}
+              >
+                <Option value="current">
+                  {selectedStore && selectedStore.id !== 'all' ? `📍 ${selectedStore.name}` : '📍 Hiện tại'}
+                </Option>
+                <Option value="all">🏪 Tất cả</Option>
+                {stores.filter(s => s.id !== selectedStore?.id && selectedStore?.id !== 'all').map(store => (
+                  <Option key={store.id} value={store.id}>
+                    🏪 {store.name}
+                  </Option>
+                ))}
+              </Select>
+            </Col>
+            <Col xs={24} md={4}>
+              <Select
+                placeholder="Thanh toán"
                 value={paymentFilter}
                 onChange={setPaymentFilter}
                 style={{ width: '100%' }}
               >
-                <Option value="all">Tất cả trạng thái</Option>
-                <Option value="pending">Chưa thanh toán</Option>
-                <Option value="partial">Thanh toán 1 phần</Option>
-                <Option value="paid">Đã thanh toán</Option>
+                <Option value="all">Tất cả TT</Option>
+                <Option value="pending">Chưa TT</Option>
+                <Option value="partial">TT 1 phần</Option>
+                <Option value="paid">Đã TT</Option>
               </Select>
             </Col>
-            <Col xs={24} md={6}>
+            <Col xs={24} md={4}>
               <Button
                 icon={<CloseCircleOutlined />}
                 onClick={handleClearFilters}

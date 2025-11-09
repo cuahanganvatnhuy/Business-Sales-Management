@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { database } from '../../services/firebase.service';
+import { useStore } from '../../contexts/StoreContext';
 import { ref, onValue, push, set, get } from 'firebase/database';
 import {
   Card,
@@ -59,6 +60,7 @@ const platforms = [
 
 const CreateOrderRetail = () => {
   const navigate = useNavigate();
+  const { selectedStore } = useStore();
   const [mainForm] = Form.useForm();
 
   // State
@@ -289,6 +291,17 @@ const CreateOrderRetail = () => {
       return;
     }
 
+    // Validate store selection
+    if (!selectedStore || selectedStore.id === 'all') {
+      Modal.warning({
+        title: 'Chưa chọn cửa hàng',
+        content: 'Vui lòng chọn một cửa hàng cụ thể để tạo đơn hàng! Không thể tạo đơn cho "Toàn Bộ Cửa Hàng".',
+        okText: 'Đã hiểu',
+        centered: true
+      });
+      return;
+    }
+
     try {
       setLoading(true);
 
@@ -329,6 +342,8 @@ const CreateOrderRetail = () => {
         orderType: salesChannel === 'tmdt' ? 'tmdt' : 'retail',
         salesChannel: salesChannel,
         platform: selectedPlatform || null,
+        storeName: selectedStore?.name || 'N/A',
+        storeId: selectedStore?.id || null,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         status: 'completed'

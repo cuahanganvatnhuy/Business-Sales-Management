@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Row, Col, Statistic, Table, Tag, Spin, Button, List, Checkbox } from 'antd';
+import { useStore } from '../../contexts/StoreContext';
+import { database } from '../../services/firebase.service';
+import { ref, onValue } from 'firebase/database';
 import {
   ShoppingCartOutlined,
   ShoppingOutlined,
@@ -14,12 +17,11 @@ import {
   ShopOutlined,
   UserOutlined
 } from '@ant-design/icons';
-import { getAllOrders } from '../../services/order.service';
-import { getAllProducts } from '../../services/product.service';
 import { formatCurrency } from '../../utils/format';
 import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from '../../utils/constants';
 
 const Dashboard = () => {
+  const { selectedStore } = useStore();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     totalOrders: 0,
@@ -31,38 +33,64 @@ const Dashboard = () => {
 
   useEffect(() => {
     loadDashboardData();
-  }, []);
+  }, [selectedStore]);
 
   const loadDashboardData = async () => {
     try {
       setLoading(true);
-      const [orders, products] = await Promise.all([
-        getAllOrders(),
-        getAllProducts()
-      ]);
+      
+      // Load orders from Firebase
+      const ordersRef = ref(database, 'salesOrders');
+      onValue(ordersRef, (snapshot) => {
+        const ordersData = snapshot.val();
+        let orders = [];
+        
+        if (ordersData) {
+          orders = Object.keys(ordersData).map(key => ({
+            id: key,
+            ...ordersData[key]
+          }));
+          
+          // Filter by store if not 'all'
+          if (selectedStore && selectedStore.id !== 'all') {
+            orders = orders.filter(order => order.storeName === selectedStore.name);
+          }
+        }
+        
+        // Load products (dùng chung, không filter)
+        const productsRef = ref(database, 'products');
+        onValue(productsRef, (prodSnapshot) => {
+          const productsData = prodSnapshot.val();
+          const products = productsData ? Object.keys(productsData).map(key => ({
+            id: key,
+            ...productsData[key]
+          })) : [];
+          
+          // Tính toán thống kê
+          const totalRevenue = orders
+            .filter(order => order.status === 'completed')
+            .reduce((sum, order) => sum + (order.totalAmount || 0), 0);
 
-      // Tính toán thống kê
-      const totalRevenue = orders
-        .filter(order => order.status === 'completed')
-        .reduce((sum, order) => sum + (order.totalAmount || 0), 0);
+          const lowStockProducts = products.filter(p => (p.stock || 0) <= 10).length;
 
-      const lowStockProducts = products.filter(p => (p.stock || 0) <= 10).length;
+          setStats({
+            totalOrders: orders.length,
+            totalProducts: products.length,
+            totalRevenue,
+            lowStockProducts
+          });
 
-      setStats({
-        totalOrders: orders.length,
-        totalProducts: products.length,
-        totalRevenue,
-        lowStockProducts
-      });
-
-      // Lấy 10 đơn hàng gần nhất
-      const sortedOrders = orders
-        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-        .slice(0, 10);
-      setRecentOrders(sortedOrders);
+          // Lấy 10 đơn hàng gần nhất
+          const sortedOrders = orders
+            .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+            .slice(0, 10);
+          setRecentOrders(sortedOrders);
+          
+          setLoading(false);
+        }, { onlyOnce: true });
+      }, { onlyOnce: true });
     } catch (error) {
       console.error('Load dashboard error:', error);
-    } finally {
       setLoading(false);
     }
   };
@@ -119,8 +147,17 @@ const Dashboard = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: 8 }}>
           <DashboardOutlined style={{ fontSize: '32px', color: '#007A33' }} />
           <h1 style={{ margin: 0, color: '#007A33', fontSize: '28px', fontWeight: '700' }}>Dashboard</h1>
+          {selectedStore && (
+            <Tag color={selectedStore.id === 'all' ? 'blue' : 'green'} style={{ fontSize: '14px', padding: '4px 12px' }}>
+              {selectedStore.id === 'all' ? '🏪 Toàn Bộ Cửa Hàng' : `📍 ${selectedStore.name}`}
+            </Tag>
+          )}
         </div>
-        <p style={{ margin: 0, color: '#666', fontSize: '14px', paddingLeft: '44px' }}>Tổng quan hệ thống quản lý đơn hàng</p>
+        <p style={{ margin: 0, color: '#666', fontSize: '14px', paddingLeft: '44px' }}>
+          {selectedStore && selectedStore.id === 'all' 
+            ? 'Tổng quan tất cả cửa hàng' 
+            : `Tổng quan cửa hàng: ${selectedStore?.name || ''}`}
+        </p>
       </div>
       
       {/* Stats Cards với icon lớn màu sắc */}
