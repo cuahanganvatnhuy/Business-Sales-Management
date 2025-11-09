@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useStore } from '../../contexts/StoreContext';
 import {
   Card,
   Form,
@@ -44,6 +45,7 @@ const { Option } = Select;
 
 const CreateOrderTMDT = () => {
   const navigate = useNavigate();
+  const { selectedStore } = useStore();
   const [mainForm] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [sellingProducts, setSellingProducts] = useState([]);
@@ -395,6 +397,17 @@ const CreateOrderTMDT = () => {
       return;
     }
 
+    // Validate store selection
+    if (!selectedStore || selectedStore.id === 'all') {
+      Modal.warning({
+        title: 'Chưa chọn cửa hàng',
+        content: 'Vui lòng chọn một cửa hàng cụ thể để tạo đơn hàng! Không thể tạo đơn cho "Toàn Bộ Cửa Hàng".',
+        okText: 'Đã hiểu',
+        centered: true
+      });
+      return;
+    }
+
     try {
       // Show progress modal
       setUploadProgress({ 
@@ -432,6 +445,8 @@ const CreateOrderTMDT = () => {
           platform: selectedPlatform,
           otherPlatform: selectedPlatform === 'other' ? otherPlatformName : '',
           orderType: 'ecommerce',
+          storeName: selectedStore?.name || 'N/A',
+          storeId: selectedStore?.id || null,
           
           // Order items (array of products)
           items: form.items.map(item => ({

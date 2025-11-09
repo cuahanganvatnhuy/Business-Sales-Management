@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { database } from '../../services/firebase.service';
-import { ref, onValue, push, set } from 'firebase/database';
+import { useStore } from '../../contexts/StoreContext';
+import { ref, onValue, push, set, get } from 'firebase/database';
 import {
   Card,
   Form,
@@ -59,6 +60,7 @@ const platforms = [
 
 const CreateOrderRetail = () => {
   const navigate = useNavigate();
+  const { selectedStore } = useStore();
   const [mainForm] = Form.useForm();
 
   // State
@@ -156,6 +158,7 @@ const CreateOrderRetail = () => {
             productId: product.id,
             productName: product.productName,
             sku: product.sku,
+            unit: product.unit || 'kg',
             sellingPrice: product.sellingPrice,
             importPrice: product.importPrice,
             total: total,
@@ -191,6 +194,48 @@ const CreateOrderRetail = () => {
   const handleDeleteForm = (formId) => {
     setProductForms(prevForms => prevForms.filter(form => form.id !== formId));
     message.success('Đã xóa sản phẩm!');
+  };
+
+  // Generate Order ID
+  const generateOrderId = async (orderType) => {
+    const today = dayjs();
+    const dateStr = today.format('DDMMYY'); // 091125
+    const prefix = orderType === 'retail' ? 'RETAIL' : 'WHOLESALE';
+    
+    try {
+      // Get all orders from salesOrders
+      const ordersRef = ref(database, 'salesOrders');
+      const snapshot = await get(ordersRef);
+      const ordersData = snapshot.val();
+      
+      // Count orders with same prefix and date
+      let maxSequence = 0;
+      if (ordersData) {
+        const searchPrefix = `${prefix}-${dateStr}-`;
+        Object.values(ordersData).forEach(order => {
+          if (order.orderId && order.orderId.startsWith(searchPrefix)) {
+            // Extract sequence number from orderId
+            const sequenceStr = order.orderId.substring(searchPrefix.length);
+            const sequence = parseInt(sequenceStr, 10);
+            if (!isNaN(sequence) && sequence > maxSequence) {
+              maxSequence = sequence;
+            }
+          }
+        });
+      }
+      
+      // Next sequence number
+      const nextSequence = maxSequence + 1;
+      
+      // Pad to 15 digits
+      const sequenceStr = nextSequence.toString().padStart(15, '0');
+      
+      return `${prefix}-${dateStr}-${sequenceStr}`;
+    } catch (error) {
+      console.error('Error generating order ID:', error);
+      // Fallback to timestamp-based ID
+      return `${prefix}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    }
   };
 
   // Calculate totals
@@ -246,6 +291,17 @@ const CreateOrderRetail = () => {
       return;
     }
 
+    // Validate store selection
+    if (!selectedStore || selectedStore.id === 'all') {
+      Modal.warning({
+        title: 'Chưa chọn cửa hàng',
+        content: 'Vui lòng chọn một cửa hàng cụ thể để tạo đơn hàng! Không thể tạo đơn cho "Toàn Bộ Cửa Hàng".',
+        okText: 'Đã hiểu',
+        centered: true
+      });
+      return;
+    }
+
     try {
       setLoading(true);
 
@@ -256,17 +312,21 @@ const CreateOrderRetail = () => {
         productId: form.productId,
         productName: form.productName,
         sku: form.sku,
+        unit: form.unit || 'kg',
         quantity: form.quantity,
         sellingPrice: form.sellingPrice,
         importPrice: form.importPrice,
-        totalAmount: form.total,
-        totalProfit: form.profit,
+        subtotal: form.total,
+        profit: form.profit,
         profitPerUnit: form.sellingPrice - form.importPrice
       }));
 
+      // Generate orderId
+      const orderId = await generateOrderId('retail');
+
       // Create order object
       const retailOrder = {
-        orderId: `RETAIL-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        orderId: orderId,
         items: items,
         orderDate: selectedDate.format('YYYY-MM-DD'),
         orderTime: selectedTime.format('HH:mm'),
@@ -282,13 +342,15 @@ const CreateOrderRetail = () => {
         orderType: salesChannel === 'tmdt' ? 'tmdt' : 'retail',
         salesChannel: salesChannel,
         platform: selectedPlatform || null,
+        storeName: selectedStore?.name || 'N/A',
+        storeId: selectedStore?.id || null,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         status: 'completed'
       };
 
       // Save to Firebase
-      const ordersRef = ref(database, 'retailSalesOrders');
+      const ordersRef = ref(database, 'salesOrders');
       await push(ordersRef, retailOrder);
 
       // Save order data and product count before reset

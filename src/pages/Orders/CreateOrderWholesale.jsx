@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { database } from '../../services/firebase.service';
+import { useStore } from '../../contexts/StoreContext';
 import { ref, onValue, push, set, get } from 'firebase/database';
 import {
   Card,
@@ -57,6 +58,7 @@ const platforms = [
 
 const CreateOrderWholesale = () => {
   const navigate = useNavigate();
+  const { selectedStore } = useStore();
   const [mainForm] = Form.useForm();
 
   // State
@@ -133,7 +135,7 @@ const CreateOrderWholesale = () => {
   // Load customer's previous orders to get price history
   const loadCustomerPriceHistory = async (customerId, customerName) => {
     try {
-      const ordersRef = ref(database, 'wholesaleSalesOrders');
+      const ordersRef = ref(database, 'salesOrders');
       const snapshot = await get(ordersRef);
       
       const ordersData = snapshot.val();
@@ -142,11 +144,11 @@ const CreateOrderWholesale = () => {
         return;
       }
 
-      // Filter orders by customer
+      // Filter orders by customer and orderType
       const customerOrders = Object.values(ordersData)
         .filter(order => 
-          order.customerId === customerId || 
-          order.customerName === customerName
+          order.orderType === 'wholesale' &&
+          (order.customerId === customerId || order.customerName === customerName)
         )
         .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)); // Latest first
 
@@ -238,6 +240,7 @@ const CreateOrderWholesale = () => {
             productId: product.id,
             productName: product.productName,
             sku: product.sku,
+            unit: product.unit || 'lỗi',
             sellingPrice: product.sellingPrice,
             discountType: discountType,
             discountValue: discountValue,
@@ -338,6 +341,48 @@ const CreateOrderWholesale = () => {
     message.success('Đã xóa sản phẩm!');
   };
 
+  // Generate Order ID
+  const generateOrderId = async (orderType) => {
+    const today = dayjs();
+    const dateStr = today.format('DDMMYY'); // 091125
+    const prefix = orderType === 'wholesale' ? 'WHOLESALE' : 'RETAIL';
+    
+    try {
+      // Get all orders from salesOrders
+      const ordersRef = ref(database, 'salesOrders');
+      const snapshot = await get(ordersRef);
+      const ordersData = snapshot.val();
+      
+      // Count orders with same prefix and date
+      let maxSequence = 0;
+      if (ordersData) {
+        const searchPrefix = `${prefix}-${dateStr}-`;
+        Object.values(ordersData).forEach(order => {
+          if (order.orderId && order.orderId.startsWith(searchPrefix)) {
+            // Extract sequence number from orderId
+            const sequenceStr = order.orderId.substring(searchPrefix.length);
+            const sequence = parseInt(sequenceStr, 10);
+            if (!isNaN(sequence) && sequence > maxSequence) {
+              maxSequence = sequence;
+            }
+          }
+        });
+      }
+      
+      // Next sequence number
+      const nextSequence = maxSequence + 1;
+      
+      // Pad to 15 digits
+      const sequenceStr = nextSequence.toString().padStart(15, '0');
+      
+      return `${prefix}-${dateStr}-${sequenceStr}`;
+    } catch (error) {
+      console.error('Error generating order ID:', error);
+      // Fallback to timestamp-based ID
+      return `${prefix}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    }
+  };
+
   // Calculate totals
   const calculateTotals = () => {
     const subtotal = productForms.reduce((sum, form) => sum + form.total, 0);
@@ -392,6 +437,17 @@ const CreateOrderWholesale = () => {
       return;
     }
 
+    // Validate store selection
+    if (!selectedStore || selectedStore.id === 'all') {
+      Modal.warning({
+        title: 'Chưa chọn cửa hàng',
+        content: 'Vui lòng chọn một cửa hàng cụ thể để tạo đơn hàng! Không thể tạo đơn cho "Toàn Bộ Cửa Hàng".',
+        okText: 'Đã hiểu',
+        centered: true
+      });
+      return;
+    }
+
     try {
       setLoading(true);
 
@@ -402,6 +458,7 @@ const CreateOrderWholesale = () => {
         productId: form.productId,
         productName: form.productName,
         sku: form.sku,
+        unit: form.unit || 'kg',
         quantity: form.quantity,
         sellingPrice: form.sellingPrice,
         discountType: form.discountType,
@@ -409,14 +466,17 @@ const CreateOrderWholesale = () => {
         priceAfterDiscount: form.priceAfterDiscount,
         discountAmount: form.sellingPrice - form.priceAfterDiscount,
         importPrice: form.importPrice,
-        totalAmount: form.total,
-        totalProfit: form.profit,
+        subtotal: form.total,
+        profit: form.profit,
         profitPerUnit: form.priceAfterDiscount - form.importPrice
       }));
 
+      // Generate orderId
+      const orderId = await generateOrderId('wholesale');
+
       // Create wholesale order object
       const wholesaleOrder = {
-        orderId: `WHOLESALE-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        orderId: orderId,
         items: items,
         orderDate: selectedDate.format('YYYY-MM-DD'),
         deliveryDate: deliveryDate ? deliveryDate.format('YYYY-MM-DD') : null,
@@ -435,13 +495,15 @@ const CreateOrderWholesale = () => {
         source: 'wholesale_sales',
         orderType: 'wholesale',
         paymentStatus: deposit >= finalAmount ? 'paid' : deposit > 0 ? 'partial' : 'pending',
+        storeName: selectedStore?.name || 'N/A',
+        storeId: selectedStore?.id || null,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         status: 'pending'
       };
 
       // Save to Firebase
-      const ordersRef = ref(database, 'wholesaleSalesOrders');
+      const ordersRef = ref(database, 'salesOrders');
       await push(ordersRef, wholesaleOrder);
 
       // Save customer if checkbox is checked and not already selected from list
