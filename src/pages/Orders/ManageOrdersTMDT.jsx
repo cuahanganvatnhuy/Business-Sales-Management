@@ -262,7 +262,7 @@ const ManageOrdersTMDT = () => {
       'Đơn Vị': order.unit || 'kg',
       'Giá Bán': order.sellingPrice,
       'Tổng Tiền': order.subtotal,
-      'Lợi Nhuận': order.profit
+      'Cửa Hàng': order.storeName || 'N/A'
     }));
 
     const ws = XLSX.utils.json_to_sheet(exportData);
@@ -410,17 +410,14 @@ const ManageOrdersTMDT = () => {
       )
     },
     {
-      title: 'Lợi Nhuận',
-      dataIndex: 'profit',
-      key: 'profit',
+      title: 'Cửa Hàng',
+      dataIndex: 'storeName',
+      key: 'storeName',
       width: 130,
-      align: 'right',
-      render: (profit) => (
-        <span style={{ 
-          color: (profit || 0) >= 0 ? '#52c41a' : '#ff4d4f', 
-          fontWeight: 600 
-        }}>
-          {formatCurrency(profit || 0)}
+      align: 'center',
+      render: (storeName) => (
+        <span style={{ color: '#666' }}>
+          {storeName || 'N/A'}
         </span>
       )
     },
