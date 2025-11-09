@@ -36,7 +36,7 @@ import * as XLSX from 'xlsx';
 const { RangePicker } = DatePicker;
 const { Option } = Select;
 
-const ManageOrdersTMDT = () => {
+const ManageOrdersRetail = () => {
   const navigate = useNavigate();
   
   // States
@@ -45,7 +45,6 @@ const ManageOrdersTMDT = () => {
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [dateRange, setDateRange] = useState([null, null]);
-  const [platformFilter, setPlatformFilter] = useState('all');
   const [storeFilter, setStoreFilter] = useState('all');
   const [selectedRowKeys, setSelectedRowKeys] = useState([]);
   const [expandedRowKeys, setExpandedRowKeys] = useState([]);
@@ -64,8 +63,8 @@ const ManageOrdersTMDT = () => {
         Object.keys(data).forEach(key => {
           const order = data[key];
           
-          // Skip if not ecommerce order
-          if (order.orderType !== 'ecommerce') return;
+          // Skip if not retail order
+          if (order.orderType !== 'retail') return;
           
           // Group all items into order summary
           if (order.items && Array.isArray(order.items) && order.items.length > 0) {
@@ -82,8 +81,8 @@ const ManageOrdersTMDT = () => {
               id: key,
               orderId: order.orderId || key,
               orderDate: order.orderDate,
-              platform: order.platform,
-              otherPlatform: order.otherPlatform,
+              customerName: order.customerName,
+              customerPhone: order.customerPhone,
               createdAt: order.createdAt,
               updatedAt: order.updatedAt,
               // Aggregated item data
@@ -94,6 +93,7 @@ const ManageOrdersTMDT = () => {
               unit: order.items[0]?.unit || 'kg', // Use first item's unit
               subtotal: totalSubtotal,
               profit: totalProfit,
+              storeName: order.storeName,
               // Store items for detail view
               items: order.items,
               _originalOrderKey: key
@@ -113,7 +113,7 @@ const ManageOrdersTMDT = () => {
         // Sort by creation date
         ordersArray.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
         
-        console.log('📦 Loaded orders:', ordersArray.length);
+        console.log('📦 Loaded retail orders:', ordersArray.length);
         console.log('📊 Sample order:', ordersArray[0]);
         
         setOrders(ordersArray);
@@ -137,7 +137,9 @@ const ManageOrdersTMDT = () => {
       filtered = filtered.filter(order =>
         order.productName?.toLowerCase().includes(searchText.toLowerCase()) ||
         order.sku?.toLowerCase().includes(searchText.toLowerCase()) ||
-        order.orderId?.toLowerCase().includes(searchText.toLowerCase())
+        order.orderId?.toLowerCase().includes(searchText.toLowerCase()) ||
+        order.customerName?.toLowerCase().includes(searchText.toLowerCase()) ||
+        order.customerPhone?.toLowerCase().includes(searchText.toLowerCase())
       );
     }
 
@@ -150,13 +152,8 @@ const ManageOrdersTMDT = () => {
       });
     }
 
-    // Platform filter
-    if (platformFilter !== 'all') {
-      filtered = filtered.filter(order => order.platform === platformFilter);
-    }
-
     setFilteredOrders(filtered);
-  }, [searchText, dateRange, platformFilter, orders]);
+  }, [searchText, dateRange, orders]);
 
   // Quick date filters
   const handleQuickFilter = (type) => {
@@ -180,7 +177,6 @@ const ManageOrdersTMDT = () => {
   const handleClearFilters = () => {
     setSearchText('');
     setDateRange([null, null]);
-    setPlatformFilter('all');
     setStoreFilter('all');
     message.success('Đã xóa tất cả bộ lọc');
   };
@@ -332,14 +328,18 @@ const ManageOrdersTMDT = () => {
       </head>
       <body>
         <div class="header">
-          <h1>HÓA ĐƠN TMĐT</h1>
+          <h1>HÓA ĐƠN BÁN LẺ</h1>
           <p>Mã đơn: ${record.orderId}</p>
         </div>
         
         <div class="info-section">
           <div class="info-row">
-            <div class="info-label">Sàn TMĐT:</div>
-            <div>${getPlatformName(record.platform)}</div>
+            <div class="info-label">Khách hàng:</div>
+            <div>${record.customerName || 'Khách lẻ'}</div>
+          </div>
+          <div class="info-row">
+            <div class="info-label">Số điện thoại:</div>
+            <div>${record.customerPhone || 'N/A'}</div>
           </div>
           <div class="info-row">
             <div class="info-label">Ngày đặt:</div>
@@ -421,55 +421,38 @@ const ManageOrdersTMDT = () => {
 
   // Export to Excel
   const handleExportExcel = () => {
-    const exportData = filteredOrders.map((order, index) => ({
-      'STT': index + 1,
-      'Mã Đơn': order.orderId,
-      'Sản Phẩm': order.productName,
-      'SKU': order.sku,
-      'Sàn TMĐT': getPlatformName(order.platform),
-      'Ngày Đặt': order.orderDate,
-      'Số Lượng': order.quantity,
-      'Đơn Vị': order.unit || 'kg',
-      'Giá Bán': order.sellingPrice,
-      'Tổng Tiền': order.subtotal,
-      'Cửa Hàng': order.storeName || 'N/A'
-    }));
+    const exportData = filteredOrders.map((order, index) => {
+      // Calculate selling price (average if multiple items)
+      let sellingPrice = 0;
+      if (order.items && order.items.length > 0) {
+        if (order.items.length === 1) {
+          sellingPrice = order.items[0].sellingPrice || 0;
+        } else {
+          sellingPrice = Math.round(order.items.reduce((sum, item) => sum + (item.sellingPrice || 0), 0) / order.items.length);
+        }
+      }
+      
+      return {
+        'STT': index + 1,
+        'Mã Đơn': order.orderId,
+        'Khách Hàng': order.customerName || 'N/A',
+        'SĐT': order.customerPhone || 'N/A',
+        'Sản Phẩm': order.productName,
+        'SKU': order.sku,
+        'Ngày Đặt': order.orderDate,
+        'Số Lượng': order.quantity,
+        'Đơn Vị': order.unit || 'kg',
+        'Giá Bán': sellingPrice,
+        'Tổng Tiền': order.subtotal,
+        'Cửa Hàng': order.storeName || 'N/A'
+      };
+    });
 
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Đơn Hàng TMĐT');
-    XLSX.writeFile(wb, `DonHangTMDT_${dayjs().format('YYYYMMDD')}.xlsx`);
+    XLSX.utils.book_append_sheet(wb, ws, 'Đơn Hàng Lẻ');
+    XLSX.writeFile(wb, `DonHangLe_${dayjs().format('YYYYMMDD')}.xlsx`);
     message.success('Đã xuất file Excel thành công!');
-  };
-
-  // Get platform name
-  const getPlatformName = (platform) => {
-    const platforms = {
-      'shopee': 'Shopee',
-      'lazada': 'Lazada',
-      'tiktok': 'TikTok Shop',
-      'sendo': 'Sendo',
-      'tiki': 'Tiki',
-      'facebook': 'Facebook',
-      'zalo': 'Zalo',
-      'other': 'Khác'
-    };
-    return platforms[platform] || platform;
-  };
-
-  // Get platform color
-  const getPlatformColor = (platform) => {
-    const colors = {
-      'shopee': 'orange',
-      'lazada': 'blue',
-      'tiktok': 'black',
-      'sendo': 'red',
-      'tiki': 'cyan',
-      'facebook': 'blue',
-      'zalo': 'blue',
-      'other': 'default'
-    };
-    return colors[platform] || 'default';
   };
 
   // Table columns
@@ -489,6 +472,20 @@ const ManageOrdersTMDT = () => {
       width: 180,
       fixed: 'left',
       render: (orderId) => orderId || 'N/A'
+    },
+    {
+      title: 'Khách Hàng',
+      dataIndex: 'customerName',
+      key: 'customerName',
+      width: 150,
+      render: (name) => name || 'N/A'
+    },
+    {
+      title: 'SĐT',
+      dataIndex: 'customerPhone',
+      key: 'customerPhone',
+      width: 120,
+      render: (phone) => phone || 'N/A'
     },
     {
       title: 'Sản Phẩm',
@@ -524,17 +521,6 @@ const ManageOrdersTMDT = () => {
         }
         return sku || 'N/A';
       }
-    },
-    {
-      title: 'Sàn TMĐT',
-      dataIndex: 'platform',
-      key: 'platform',
-      width: 120,
-      render: (platform) => (
-        <Tag color={getPlatformColor(platform)}>
-          {getPlatformName(platform)}
-        </Tag>
-      )
     },
     {
       title: 'Ngày Đặt',
@@ -659,9 +645,9 @@ const ManageOrdersTMDT = () => {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <ShoppingOutlined style={{ fontSize: 32, color: '#007A33' }} />
+          <ShopOutlined style={{ fontSize: 32, color: '#007A33' }} />
           <div>
-            <h1 style={{ margin: 0, fontSize: 24, color: '#007A33' }}>Quản Lý Đơn Hàng TMĐT</h1>
+            <h1 style={{ margin: 0, fontSize: 24, color: '#007A33' }}>Quản Lý Đơn Hàng Bán Lẻ</h1>
             <p style={{ margin: 0, color: '#666' }}>Quản lý các đơn hàng từ TMĐT, Bán Lẻ và Bán Sỉ</p>
           </div>
         </div>
@@ -673,10 +659,11 @@ const ManageOrdersTMDT = () => {
           <Button
             icon={<ShoppingOutlined />}
             size="large"
-            type="primary"
+            onClick={() => navigate('/orders/manage/ecommerce')}
             style={{
-              background: '#007A33',
-              borderColor: '#007A33'
+              borderColor: '#d9d9d9',
+              background: 'white',
+              color: '#666'
             }}
           >
             Quản lý đơn hàng TMĐT
@@ -684,11 +671,10 @@ const ManageOrdersTMDT = () => {
           <Button
             icon={<ShopOutlined />}
             size="large"
-            onClick={() => navigate('/orders/manage/retail')}
+            type="primary"
             style={{
-              borderColor: '#d9d9d9',
-              background: 'white',
-              color: '#666'
+              background: '#007A33',
+              borderColor: '#007A33'
             }}
           >
             Quản lý đơn hàng lẻ
@@ -819,7 +805,7 @@ const ManageOrdersTMDT = () => {
 
       {/* Orders Table */}
       <Card
-        title={<><ShoppingOutlined /> Danh Sách Đơn Hàng TMĐT</>}
+        title={<><ShopOutlined /> Danh Sách Đơn Hàng Lẻ</>}
         extra={
           <Space>
             <Popconfirm
@@ -872,34 +858,16 @@ const ManageOrdersTMDT = () => {
       >
         <Space style={{ marginBottom: 16, width: '100%' }} direction="vertical">
           <Row gutter={16}>
-            <Col xs={24} md={8}>
+            <Col xs={24} md={12}>
               <Input
-                placeholder="Nhập mã đơn hàng, SKU, tên sản phẩm..."
+                placeholder="Nhập mã đơn hàng, SKU, tên sản phẩm, khách hàng, SĐT..."
                 prefix={<SearchOutlined />}
                 value={searchText}
                 onChange={(e) => setSearchText(e.target.value)}
                 allowClear
               />
             </Col>
-            <Col xs={24} md={8}>
-              <Select
-                placeholder="Tất cả sàn"
-                value={platformFilter}
-                onChange={setPlatformFilter}
-                style={{ width: '100%' }}
-              >
-                <Option value="all">Tất cả sàn</Option>
-                <Option value="shopee">Shopee</Option>
-                <Option value="lazada">Lazada</Option>
-                <Option value="tiktok">TikTok Shop</Option>
-                <Option value="sendo">Sendo</Option>
-                <Option value="tiki">Tiki</Option>
-                <Option value="facebook">Facebook</Option>
-                <Option value="zalo">Zalo</Option>
-                <Option value="other">Khác</Option>
-              </Select>
-            </Col>
-            <Col xs={24} md={8}>
+            <Col xs={24} md={12}>
               <Button
                 icon={<CloseCircleOutlined />}
                 onClick={handleClearFilters}
@@ -1013,7 +981,7 @@ const ManageOrdersTMDT = () => {
               }
             }
           })}
-          scroll={{ x: 1500 }}
+          scroll={{ x: 1600 }}
           pagination={{
             total: filteredOrders.length,
             pageSize: 10,
@@ -1026,4 +994,4 @@ const ManageOrdersTMDT = () => {
   );
 };
 
-export default ManageOrdersTMDT;
+export default ManageOrdersRetail;

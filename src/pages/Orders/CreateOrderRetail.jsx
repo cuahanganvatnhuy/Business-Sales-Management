@@ -156,6 +156,7 @@ const CreateOrderRetail = () => {
             productId: product.id,
             productName: product.productName,
             sku: product.sku,
+            unit: product.unit || 'kg',
             sellingPrice: product.sellingPrice,
             importPrice: product.importPrice,
             total: total,
@@ -256,11 +257,12 @@ const CreateOrderRetail = () => {
         productId: form.productId,
         productName: form.productName,
         sku: form.sku,
+        unit: form.unit || 'kg',
         quantity: form.quantity,
         sellingPrice: form.sellingPrice,
         importPrice: form.importPrice,
-        totalAmount: form.total,
-        totalProfit: form.profit,
+        subtotal: form.total,
+        profit: form.profit,
         profitPerUnit: form.sellingPrice - form.importPrice
       }));
 
@@ -288,7 +290,7 @@ const CreateOrderRetail = () => {
       };
 
       // Save to Firebase
-      const ordersRef = ref(database, 'retailSalesOrders');
+      const ordersRef = ref(database, 'salesOrders');
       await push(ordersRef, retailOrder);
 
       // Save order data and product count before reset
