@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { database } from '../../services/firebase.service';
-import { ref, onValue, remove } from 'firebase/database';
+import { ref, onValue, remove, update } from 'firebase/database';
 import {
   Card,
   Table,
@@ -15,11 +15,14 @@ import {
   Col,
   Statistic,
   message,
-  Popconfirm
+  Popconfirm,
+  Modal,
+  Radio,
+  Dropdown
 } from 'antd';
 import {
   ShoppingOutlined,
-  TeamOutlined,
+  ShopOutlined,
   TeamOutlined,
   SearchOutlined,
   DownloadOutlined,
@@ -27,7 +30,10 @@ import {
   CloseCircleOutlined,
   CalendarOutlined,
   DeleteOutlined,
-  PrinterOutlined
+  PrinterOutlined,
+  EyeOutlined,
+  EditOutlined,
+  MoreOutlined
 } from '@ant-design/icons';
 import { formatCurrency } from '../../utils/format';
 import dayjs from 'dayjs';
@@ -48,6 +54,12 @@ const ManageOrdersWholesale = () => {
   const [storeFilter, setStoreFilter] = useState('all');
   const [selectedRowKeys, setSelectedRowKeys] = useState([]);
   const [expandedRowKeys, setExpandedRowKeys] = useState([]);
+  const [detailModalVisible, setDetailModalVisible] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [paymentFilter, setPaymentFilter] = useState('all');
+  const [editPaymentModalVisible, setEditPaymentModalVisible] = useState(false);
+  const [editingOrder, setEditingOrder] = useState(null);
+  const [newPaymentStatus, setNewPaymentStatus] = useState('');
 
   // Load orders from Firebase
   useEffect(() => {
@@ -83,6 +95,7 @@ const ManageOrdersWholesale = () => {
               orderDate: order.orderDate,
               customerName: order.customerName,
               customerPhone: order.customerPhone,
+              customerAddress: order.customerAddress,
               createdAt: order.createdAt,
               updatedAt: order.updatedAt,
               // Aggregated item data
@@ -94,6 +107,10 @@ const ManageOrdersWholesale = () => {
               subtotal: totalSubtotal,
               profit: totalProfit,
               storeName: order.storeName,
+              // Payment info
+              paymentStatus: order.paymentStatus || 'pending',
+              deposit: order.deposit || 0,
+              remainingAmount: order.remainingAmount || 0,
               // Store items for detail view
               items: order.items,
               _originalOrderKey: key
@@ -152,8 +169,13 @@ const ManageOrdersWholesale = () => {
       });
     }
 
+    // Payment status filter
+    if (paymentFilter !== 'all') {
+      filtered = filtered.filter(order => (order.paymentStatus || 'pending') === paymentFilter);
+    }
+
     setFilteredOrders(filtered);
-  }, [searchText, dateRange, orders]);
+  }, [searchText, dateRange, paymentFilter, orders]);
 
   // Quick date filters
   const handleQuickFilter = (type) => {
@@ -178,6 +200,7 @@ const ManageOrdersWholesale = () => {
     setSearchText('');
     setDateRange([null, null]);
     setStoreFilter('all');
+    setPaymentFilter('all');
     message.success('Đã xóa tất cả bộ lọc');
   };
 
@@ -318,14 +341,14 @@ const ManageOrdersWholesale = () => {
       </head>
       <body>
         <div class="header">
-          <h1>HÓA ĐƠN BÁN LẺ</h1>
+          <h1>HÓA ĐƠN BÁN SỈ</h1>
           <p>Mã đơn: ${record.orderId}</p>
         </div>
         
         <div class="info-section">
           <div class="info-row">
             <div class="info-label">Khách hàng:</div>
-            <div>${record.customerName || 'Khách lẻ'}</div>
+            <div>${record.customerName || 'N/A'}</div>
           </div>
           <div class="info-row">
             <div class="info-label">Số điện thoại:</div>
@@ -392,6 +415,41 @@ const ManageOrdersWholesale = () => {
       </body>
       </html>
     `;
+  };
+
+  // View order detail
+  const handleViewDetail = (record) => {
+    setSelectedOrder(record);
+    setDetailModalVisible(true);
+  };
+
+  // Edit payment status
+  const handleEditPaymentStatus = (record) => {
+    setEditingOrder(record);
+    setNewPaymentStatus(record.paymentStatus || 'pending');
+    setEditPaymentModalVisible(true);
+  };
+
+  // Save payment status
+  const handleSavePaymentStatus = async () => {
+    if (!editingOrder) return;
+
+    try {
+      setLoading(true);
+      const orderRef = ref(database, `salesOrders/${editingOrder.id}`);
+      await update(orderRef, {
+        paymentStatus: newPaymentStatus,
+        updatedAt: new Date().toISOString()
+      });
+      message.success('Đã cập nhật trạng thái thanh toán!');
+      setEditPaymentModalVisible(false);
+      setEditingOrder(null);
+    } catch (error) {
+      console.error('Error updating payment status:', error);
+      message.error('Lỗi khi cập nhật: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Print Invoice
@@ -476,14 +534,14 @@ const ManageOrdersWholesale = () => {
       </head>
       <body>
         <div class="header">
-          <h1>HÓA ĐƠN BÁN LẺ</h1>
+          <h1>HÓA ĐƠN BÁN SỈ</h1>
           <p>Mã đơn: ${record.orderId}</p>
         </div>
         
         <div class="info-section">
           <div class="info-row">
             <div class="info-label">Khách hàng:</div>
-            <div>${record.customerName || 'Khách lẻ'}</div>
+            <div>${record.customerName || 'N/A'}</div>
           </div>
           <div class="info-row">
             <div class="info-label">Số điện thoại:</div>
@@ -659,14 +717,14 @@ const ManageOrdersWholesale = () => {
         ${selectedOrders.map((record, index) => `
           <div>
             <div class="header">
-              <h1>HÓA ĐƠN BÁN LẺ</h1>
+              <h1>HÓA ĐƠN BÁN SỈ</h1>
               <p>Mã đơn: ${record.orderId}</p>
             </div>
             
             <div class="info-section">
               <div class="info-row">
                 <div class="info-label">Khách hàng:</div>
-                <div>${record.customerName || 'Khách lẻ'}</div>
+                <div>${record.customerName || 'N/A'}</div>
               </div>
               <div class="info-row">
                 <div class="info-label">Số điện thoại:</div>
@@ -842,14 +900,14 @@ const ManageOrdersWholesale = () => {
         ${filteredOrders.map((record, index) => `
           <div>
             <div class="header">
-              <h1>HÓA ĐƠN BÁN LẺ</h1>
+              <h1>HÓA ĐƠN BÁN SỈ</h1>
               <p>Mã đơn: ${record.orderId}</p>
             </div>
             
             <div class="info-section">
               <div class="info-row">
                 <div class="info-label">Khách hàng:</div>
-                <div>${record.customerName || 'Khách lẻ'}</div>
+                <div>${record.customerName || 'N/A'}</div>
               </div>
               <div class="info-row">
                 <div class="info-label">Số điện thoại:</div>
@@ -947,6 +1005,13 @@ const ManageOrdersWholesale = () => {
         }
       }
       
+      // Payment status text
+      const paymentStatusText = {
+        paid: 'Đã thanh toán',
+        partial: 'Thanh toán 1 phần',
+        pending: 'Chưa thanh toán'
+      };
+      
       return {
         'STT': index + 1,
         'Mã Đơn': order.orderId,
@@ -959,13 +1024,16 @@ const ManageOrdersWholesale = () => {
         'Đơn Vị': order.unit || 'kg',
         'Giá Bán': sellingPrice,
         'Tổng Tiền': order.subtotal,
+        'TT Thanh Toán': paymentStatusText[order.paymentStatus] || 'Chưa thanh toán',
+        'Đặt Cọc': order.deposit || 0,
+        'Còn Lại': order.remainingAmount || 0,
         'Cửa Hàng': order.storeName || 'N/A'
       };
     });
 
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Đơn Hàng Lẻ');
+    XLSX.utils.book_append_sheet(wb, ws, 'Đơn Hàng Sỉ');
     XLSX.writeFile(wb, `DonHangSi_${dayjs().format('YYYYMMDD')}.xlsx`);
     message.success('Đã xuất file Excel thành công!');
   };
@@ -1093,6 +1161,22 @@ const ManageOrdersWholesale = () => {
       )
     },
     {
+      title: 'TT Thanh Toán',
+      dataIndex: 'paymentStatus',
+      key: 'paymentStatus',
+      width: 140,
+      align: 'center',
+      render: (status) => {
+        const statusConfig = {
+          paid: { text: 'Đã thanh toán', color: 'green' },
+          partial: { text: 'Thanh toán 1 phần', color: 'orange' },
+          pending: { text: 'Chưa thanh toán', color: 'red' }
+        };
+        const config = statusConfig[status] || statusConfig.pending;
+        return <Tag color={config.color}>{config.text}</Tag>;
+      }
+    },
+    {
       title: 'Cửa Hàng',
       dataIndex: 'storeName',
       key: 'storeName',
@@ -1110,36 +1194,62 @@ const ManageOrdersWholesale = () => {
       width: 150,
       align: 'center',
       fixed: 'right',
-      render: (_, record) => (
-        <Space size="small">
-          <Button
-            type="primary"
-            icon={<PrinterOutlined />}
-            size="small"
-            onClick={() => handlePrintInvoice(record)}
-            style={{ background: '#007A33', borderColor: '#007A33' }}
-          >
-            In
-          </Button>
-          <Popconfirm
-            title="Xóa đơn hàng này?"
-            description="Bạn có chắc chắn muốn xóa đơn hàng này không?"
-            onConfirm={() => handleDeleteOrder(record)}
-            okText="Xóa"
-            cancelText="Hủy"
-            okButtonProps={{ danger: true }}
-          >
-            <Button 
-              type="text" 
-              danger 
-              icon={<DeleteOutlined />}
+      render: (_, record) => {
+        const menuItems = [
+          {
+            key: 'view',
+            icon: <EyeOutlined style={{ color: '#1890ff' }} />,
+            label: 'Xem chi tiết',
+            onClick: () => handleViewDetail(record)
+          },
+          {
+            key: 'print',
+            icon: <PrinterOutlined style={{ color: '#007A33' }} />,
+            label: 'In hóa đơn',
+            onClick: () => handlePrintInvoice(record)
+          },
+          {
+            type: 'divider'
+          },
+          {
+            key: 'delete',
+            icon: <DeleteOutlined style={{ color: '#ff4d4f' }} />,
+            label: 'Xóa',
+            danger: true,
+            onClick: () => {
+              Modal.confirm({
+                title: 'Xóa đơn hàng này?',
+                content: 'Bạn có chắc chắn muốn xóa đơn hàng này không?',
+                okText: 'Xóa',
+                cancelText: 'Hủy',
+                okButtonProps: { danger: true },
+                onOk: () => handleDeleteOrder(record)
+              });
+            }
+          }
+        ];
+
+        return (
+          <Space size="small">
+            <Button
+              icon={<EditOutlined />}
               size="small"
+              onClick={() => handleEditPaymentStatus(record)}
+              style={{ borderColor: '#faad14', color: '#faad14' }}
+            />
+            <Dropdown
+              menu={{ items: menuItems }}
+              trigger={['click']}
+              placement="bottomRight"
             >
-              Xóa
-            </Button>
-          </Popconfirm>
-        </Space>
-      )
+              <Button
+                icon={<MoreOutlined />}
+                size="small"
+              />
+            </Dropdown>
+          </Space>
+        );
+      }
     }
   ];
 
@@ -1162,7 +1272,7 @@ const ManageOrdersWholesale = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <TeamOutlined style={{ fontSize: 32, color: '#007A33' }} />
           <div>
-            <h1 style={{ margin: 0, fontSize: 24, color: '#007A33' }}>Quản Lý Đơn Hàng Bán Lẻ</h1>
+            <h1 style={{ margin: 0, fontSize: 24, color: '#007A33' }}>Quản Lý Đơn Hàng Bán Sỉ</h1>
             <p style={{ margin: 0, color: '#666' }}>Quản lý các đơn hàng từ TMĐT, Bán Lẻ và Bán Sỉ</p>
           </div>
         </div>
@@ -1184,12 +1294,13 @@ const ManageOrdersWholesale = () => {
             Quản lý đơn hàng TMĐT
           </Button>
           <Button
-            icon={<TeamOutlined />}
+            icon={<ShopOutlined />}
             size="large"
-            type="primary"
+            onClick={() => navigate('/orders/manage/retail')}
             style={{
-              background: '#007A33',
-              borderColor: '#007A33'
+              borderColor: '#d9d9d9',
+              background: 'white',
+              color: '#666'
             }}
           >
             Quản lý đơn hàng lẻ
@@ -1197,11 +1308,10 @@ const ManageOrdersWholesale = () => {
           <Button
             icon={<TeamOutlined />}
             size="large"
-            onClick={() => navigate('/orders/manage/wholesale')}
+            type="primary"
             style={{
-              borderColor: '#d9d9d9',
-              background: 'white',
-              color: '#666'
+              background: '#007A33',
+              borderColor: '#007A33'
             }}
           >
             Quản lý đơn hàng sỉ
@@ -1400,7 +1510,20 @@ const ManageOrdersWholesale = () => {
                 allowClear
               />
             </Col>
-            <Col xs={24} md={12}>
+            <Col xs={24} md={6}>
+              <Select
+                placeholder="Lọc theo TT thanh toán"
+                value={paymentFilter}
+                onChange={setPaymentFilter}
+                style={{ width: '100%' }}
+              >
+                <Option value="all">Tất cả trạng thái</Option>
+                <Option value="pending">Chưa thanh toán</Option>
+                <Option value="partial">Thanh toán 1 phần</Option>
+                <Option value="paid">Đã thanh toán</Option>
+              </Select>
+            </Col>
+            <Col xs={24} md={6}>
               <Button
                 icon={<CloseCircleOutlined />}
                 onClick={handleClearFilters}
@@ -1514,7 +1637,7 @@ const ManageOrdersWholesale = () => {
               }
             }
           })}
-          scroll={{ x: 1600 }}
+          scroll={{ x: 1690 }}
           pagination={{
             total: filteredOrders.length,
             pageSize: 10,
@@ -1523,6 +1646,188 @@ const ManageOrdersWholesale = () => {
           }}
         />
       </Card>
+
+      {/* Detail Modal */}
+      <Modal
+        title={<><EyeOutlined style={{ marginRight: 8 }} />Chi Tiết Đơn Hàng Sỉ</>}
+        open={detailModalVisible}
+        onCancel={() => setDetailModalVisible(false)}
+        footer={[
+          <Button key="close" onClick={() => setDetailModalVisible(false)}>
+            Đóng
+          </Button>,
+          <Button 
+            key="print" 
+            type="primary"
+            icon={<PrinterOutlined />}
+            onClick={() => {
+              handlePrintInvoice(selectedOrder);
+              setDetailModalVisible(false);
+            }}
+            style={{ background: '#007A33', borderColor: '#007A33' }}
+          >
+            In Hóa Đơn
+          </Button>
+        ]}
+        width={900}
+      >
+        {selectedOrder && (
+          <div>
+            {/* Order Info */}
+            <Card size="small" style={{ marginBottom: 16 }}>
+              <Row gutter={16}>
+                <Col span={12}>
+                  <p><strong>Mã Đơn:</strong> {selectedOrder.orderId}</p>
+                  <p><strong>Khách Hàng:</strong> {selectedOrder.customerName || 'N/A'}</p>
+                  <p><strong>SĐT:</strong> {selectedOrder.customerPhone || 'N/A'}</p>
+                  <p><strong>Địa Chỉ:</strong> {selectedOrder.customerAddress || 'N/A'}</p>
+                </Col>
+                <Col span={12}>
+                  <p><strong>Ngày Đặt:</strong> {dayjs(selectedOrder.orderDate).format('DD/MM/YYYY')}</p>
+                  <p><strong>Cửa Hàng:</strong> {selectedOrder.storeName || 'N/A'}</p>
+                  <p>
+                    <strong>TT Thanh Toán:</strong>{' '}
+                    {selectedOrder.paymentStatus === 'paid' && <Tag color="green">Đã thanh toán</Tag>}
+                    {selectedOrder.paymentStatus === 'partial' && <Tag color="orange">Thanh toán 1 phần</Tag>}
+                    {selectedOrder.paymentStatus === 'pending' && <Tag color="red">Chưa thanh toán</Tag>}
+                    {!selectedOrder.paymentStatus && <Tag color="red">Chưa thanh toán</Tag>}
+                  </p>
+                  <p><strong>Trạng Thái:</strong> <Tag color="green">Hoàn Thành</Tag></p>
+                </Col>
+              </Row>
+            </Card>
+
+            {/* Products Table */}
+            <Table
+              size="small"
+              dataSource={selectedOrder.items || [{
+                productName: selectedOrder.productName,
+                sku: selectedOrder.sku,
+                quantity: selectedOrder.quantity,
+                unit: selectedOrder.unit,
+                subtotal: selectedOrder.subtotal
+              }]}
+              rowKey={(item, index) => index}
+              pagination={false}
+              columns={[
+                {
+                  title: 'STT',
+                  key: 'stt',
+                  width: 50,
+                  render: (_, __, index) => index + 1
+                },
+                {
+                  title: 'Sản Phẩm',
+                  dataIndex: 'productName',
+                  key: 'productName'
+                },
+                {
+                  title: 'SKU',
+                  dataIndex: 'sku',
+                  key: 'sku',
+                  width: 120
+                },
+                {
+                  title: 'Số Lượng',
+                  dataIndex: 'quantity',
+                  key: 'quantity',
+                  width: 100,
+                  align: 'center',
+                  render: (qty, record) => `${qty} ${record.unit || 'kg'}`
+                },
+                {
+                  title: 'Đơn Giá',
+                  dataIndex: 'sellingPrice',
+                  key: 'sellingPrice',
+                  width: 120,
+                  align: 'right',
+                  render: (price) => formatCurrency(price || 0)
+                },
+                {
+                  title: 'Thành Tiền',
+                  dataIndex: 'subtotal',
+                  key: 'subtotal',
+                  width: 130,
+                  align: 'right',
+                  render: (amount) => (
+                    <span style={{ color: '#007A33', fontWeight: 600 }}>
+                      {formatCurrency(amount || 0)}
+                    </span>
+                  )
+                }
+              ]}
+            />
+
+            {/* Summary */}
+            <div style={{ marginTop: 16 }}>
+              <Row gutter={16}>
+                <Col span={12}>
+                  {selectedOrder.deposit > 0 && (
+                    <div style={{ padding: '12px', background: '#f0f9ff', borderRadius: 8, marginBottom: 8 }}>
+                      <p style={{ margin: '4px 0' }}><strong>Đặt Cọc:</strong> <span style={{ color: '#1890ff' }}>{formatCurrency(selectedOrder.deposit || 0)}</span></p>
+                      <p style={{ margin: '4px 0' }}><strong>Còn Lại:</strong> <span style={{ color: '#ff4d4f' }}>{formatCurrency(selectedOrder.remainingAmount || 0)}</span></p>
+                    </div>
+                  )}
+                </Col>
+                <Col span={12} style={{ textAlign: 'right' }}>
+                  <p style={{ fontSize: 16 }}>
+                    <strong>Tổng Cộng: </strong>
+                    <span style={{ color: '#007A33', fontSize: 18, fontWeight: 'bold' }}>
+                      {formatCurrency(selectedOrder.subtotal || 0)}
+                    </span>
+                  </p>
+                </Col>
+              </Row>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Edit Payment Status Modal */}
+      <Modal
+        title={<><EditOutlined style={{ marginRight: 8 }} />Sửa Trạng Thái Thanh Toán</>}
+        open={editPaymentModalVisible}
+        onCancel={() => setEditPaymentModalVisible(false)}
+        onOk={handleSavePaymentStatus}
+        okText="Lưu"
+        cancelText="Hủy"
+        okButtonProps={{ style: { background: '#007A33', borderColor: '#007A33' } }}
+        width={500}
+      >
+        {editingOrder && (
+          <div>
+            <Card size="small" style={{ marginBottom: 16, background: '#f0f9ff' }}>
+              <p style={{ margin: '4px 0' }}><strong>Mã Đơn:</strong> {editingOrder.orderId}</p>
+              <p style={{ margin: '4px 0' }}><strong>Khách Hàng:</strong> {editingOrder.customerName || 'N/A'}</p>
+              <p style={{ margin: '4px 0' }}><strong>Tổng Tiền:</strong> <span style={{ color: '#007A33', fontWeight: 600 }}>{formatCurrency(editingOrder.subtotal || 0)}</span></p>
+            </Card>
+            
+            <div style={{ marginBottom: 16 }}>
+              <strong style={{ display: 'block', marginBottom: 8 }}>Chọn trạng thái thanh toán:</strong>
+              <Radio.Group 
+                value={newPaymentStatus} 
+                onChange={(e) => setNewPaymentStatus(e.target.value)}
+                style={{ width: '100%' }}
+              >
+                <Space direction="vertical" style={{ width: '100%' }}>
+                  <Radio value="pending">
+                    <Tag color="red">Chưa thanh toán</Tag>
+                    <span style={{ marginLeft: 8, color: '#666' }}>Khách hàng chưa thanh toán</span>
+                  </Radio>
+                  <Radio value="partial">
+                    <Tag color="orange">Thanh toán 1 phần</Tag>
+                    <span style={{ marginLeft: 8, color: '#666' }}>Đã đặt cọc hoặc thanh toán 1 phần</span>
+                  </Radio>
+                  <Radio value="paid">
+                    <Tag color="green">Đã thanh toán</Tag>
+                    <span style={{ marginLeft: 8, color: '#666' }}>Đã thanh toán đầy đủ</span>
+                  </Radio>
+                </Space>
+              </Radio.Group>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };

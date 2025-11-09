@@ -15,7 +15,9 @@ import {
   Col,
   Statistic,
   message,
-  Popconfirm
+  Popconfirm,
+  Dropdown,
+  Modal
 } from 'antd';
 import {
   ShoppingOutlined,
@@ -27,7 +29,9 @@ import {
   CloseCircleOutlined,
   CalendarOutlined,
   DeleteOutlined,
-  PrinterOutlined
+  PrinterOutlined,
+  EyeOutlined,
+  MoreOutlined
 } from '@ant-design/icons';
 import { formatCurrency } from '../../utils/format';
 import dayjs from 'dayjs';
@@ -48,6 +52,8 @@ const ManageOrdersRetail = () => {
   const [storeFilter, setStoreFilter] = useState('all');
   const [selectedRowKeys, setSelectedRowKeys] = useState([]);
   const [expandedRowKeys, setExpandedRowKeys] = useState([]);
+  const [detailModalVisible, setDetailModalVisible] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState(null);
 
   // Load orders from Firebase
   useEffect(() => {
@@ -392,6 +398,12 @@ const ManageOrdersRetail = () => {
       </body>
       </html>
     `;
+  };
+
+  // View order detail
+  const handleViewDetail = (record) => {
+    setSelectedOrder(record);
+    setDetailModalVisible(true);
   };
 
   // Print Invoice
@@ -1107,39 +1119,57 @@ const ManageOrdersRetail = () => {
     {
       title: 'Thao Tác',
       key: 'action',
-      width: 150,
+      width: 80,
       align: 'center',
       fixed: 'right',
-      render: (_, record) => (
-        <Space size="small">
-          <Button
-            type="primary"
-            icon={<PrinterOutlined />}
-            size="small"
-            onClick={() => handlePrintInvoice(record)}
-            style={{ background: '#007A33', borderColor: '#007A33' }}
+      render: (_, record) => {
+        const menuItems = [
+          {
+            key: 'view',
+            icon: <EyeOutlined style={{ color: '#1890ff' }} />,
+            label: 'Xem chi tiết',
+            onClick: () => handleViewDetail(record)
+          },
+          {
+            key: 'print',
+            icon: <PrinterOutlined style={{ color: '#007A33' }} />,
+            label: 'In hóa đơn',
+            onClick: () => handlePrintInvoice(record)
+          },
+          {
+            type: 'divider'
+          },
+          {
+            key: 'delete',
+            icon: <DeleteOutlined style={{ color: '#ff4d4f' }} />,
+            label: 'Xóa',
+            danger: true,
+            onClick: () => {
+              Modal.confirm({
+                title: 'Xóa đơn hàng này?',
+                content: 'Bạn có chắc chắn muốn xóa đơn hàng này không?',
+                okText: 'Xóa',
+                cancelText: 'Hủy',
+                okButtonProps: { danger: true },
+                onOk: () => handleDeleteOrder(record)
+              });
+            }
+          }
+        ];
+
+        return (
+          <Dropdown
+            menu={{ items: menuItems }}
+            trigger={['click']}
+            placement="bottomRight"
           >
-            In
-          </Button>
-          <Popconfirm
-            title="Xóa đơn hàng này?"
-            description="Bạn có chắc chắn muốn xóa đơn hàng này không?"
-            onConfirm={() => handleDeleteOrder(record)}
-            okText="Xóa"
-            cancelText="Hủy"
-            okButtonProps={{ danger: true }}
-          >
-            <Button 
-              type="text" 
-              danger 
-              icon={<DeleteOutlined />}
+            <Button
+              icon={<MoreOutlined />}
               size="small"
-            >
-              Xóa
-            </Button>
-          </Popconfirm>
-        </Space>
-      )
+            />
+          </Dropdown>
+        );
+      }
     }
   ];
 
@@ -1523,6 +1553,123 @@ const ManageOrdersRetail = () => {
           }}
         />
       </Card>
+
+      {/* Detail Modal */}
+      <Modal
+        title={<><EyeOutlined style={{ marginRight: 8 }} />Chi Tiết Đơn Hàng Lẻ</>}
+        open={detailModalVisible}
+        onCancel={() => setDetailModalVisible(false)}
+        footer={[
+          <Button key="close" onClick={() => setDetailModalVisible(false)}>
+            Đóng
+          </Button>,
+          <Button 
+            key="print" 
+            type="primary"
+            icon={<PrinterOutlined />}
+            onClick={() => {
+              handlePrintInvoice(selectedOrder);
+              setDetailModalVisible(false);
+            }}
+            style={{ background: '#007A33', borderColor: '#007A33' }}
+          >
+            In Hóa Đơn
+          </Button>
+        ]}
+        width={900}
+      >
+        {selectedOrder && (
+          <div>
+            {/* Order Info */}
+            <Card size="small" style={{ marginBottom: 16 }}>
+              <Row gutter={16}>
+                <Col span={12}>
+                  <p><strong>Mã Đơn:</strong> {selectedOrder.orderId}</p>
+                  <p><strong>Khách Hàng:</strong> {selectedOrder.customerName || 'N/A'}</p>
+                  <p><strong>SĐT:</strong> {selectedOrder.customerPhone || 'N/A'}</p>
+                </Col>
+                <Col span={12}>
+                  <p><strong>Ngày Đặt:</strong> {dayjs(selectedOrder.orderDate).format('DD/MM/YYYY')}</p>
+                  <p><strong>Giờ:</strong> {selectedOrder.orderTime || 'N/A'}</p>
+                  <p><strong>Cửa Hàng:</strong> {selectedOrder.storeName || 'N/A'}</p>
+                  <p><strong>Trạng Thái:</strong> <Tag color="green">Hoàn Thành</Tag></p>
+                </Col>
+              </Row>
+            </Card>
+
+            {/* Products Table */}
+            <Table
+              size="small"
+              dataSource={selectedOrder.items || [{
+                productName: selectedOrder.productName,
+                sku: selectedOrder.sku,
+                quantity: selectedOrder.quantity,
+                unit: selectedOrder.unit,
+                subtotal: selectedOrder.subtotal
+              }]}
+              rowKey={(item, index) => index}
+              pagination={false}
+              columns={[
+                {
+                  title: 'STT',
+                  key: 'stt',
+                  width: 50,
+                  render: (_, __, index) => index + 1
+                },
+                {
+                  title: 'Sản Phẩm',
+                  dataIndex: 'productName',
+                  key: 'productName'
+                },
+                {
+                  title: 'SKU',
+                  dataIndex: 'sku',
+                  key: 'sku',
+                  width: 120
+                },
+                {
+                  title: 'Số Lượng',
+                  dataIndex: 'quantity',
+                  key: 'quantity',
+                  width: 100,
+                  align: 'center',
+                  render: (qty, record) => `${qty} ${record.unit || 'kg'}`
+                },
+                {
+                  title: 'Đơn Giá',
+                  dataIndex: 'sellingPrice',
+                  key: 'sellingPrice',
+                  width: 120,
+                  align: 'right',
+                  render: (price) => formatCurrency(price || 0)
+                },
+                {
+                  title: 'Thành Tiền',
+                  dataIndex: 'subtotal',
+                  key: 'subtotal',
+                  width: 130,
+                  align: 'right',
+                  render: (amount) => (
+                    <span style={{ color: '#007A33', fontWeight: 600 }}>
+                      {formatCurrency(amount || 0)}
+                    </span>
+                  )
+                }
+              ]}
+            />
+
+            {/* Summary */}
+            <div style={{ marginTop: 16, textAlign: 'right' }}>
+              <p style={{ fontSize: 16 }}>
+                <strong>Tổng Cộng: </strong>
+                <span style={{ color: '#007A33', fontSize: 18, fontWeight: 'bold' }}>
+                  {formatCurrency(selectedOrder.subtotal || 0)}
+                </span>
+              </p>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };

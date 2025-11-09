@@ -13,7 +13,8 @@ import {
   MenuUnfoldOutlined,
   BarChartOutlined,
   FileTextOutlined,
-  ShopOutlined
+  ShopOutlined,
+  DollarOutlined
 } from '@ant-design/icons';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
@@ -105,6 +106,16 @@ const MainLayout = () => {
           key: '/orders/manage/wholesale',
           icon: <TeamOutlined />,
           label: 'Quản lý đơn hàng sỉ',
+        },
+        {
+          key: '/orders/debt',
+          icon: <DollarOutlined />,
+          label: 'Công nợ khách hàng sỉ',
+        },
+        {
+          key: '/orders/debt/dashboard',
+          icon: <BarChartOutlined />,
+          label: 'Dashboard công nợ',
         },
       ]
     },
@@ -347,6 +358,7 @@ const MainLayout = () => {
           top: 0,
           bottom: 0,
           zIndex: 1000,
+          background: 'linear-gradient(135deg, #007A33 0%, #005A28 100%)',
         }}
       >
         <div className="logo">

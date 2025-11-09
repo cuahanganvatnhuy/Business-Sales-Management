@@ -9,7 +9,7 @@ import Dashboard from './pages/Dashboard';
 import { AddProduct, ManageProducts } from './pages/Products';
 import Categories from './pages/Categories';
 import SellingProducts from './pages/SellingProducts';
-import { CreateOrderTMDT, CreateOrderRetail, CreateOrderWholesale, ManageOrdersTMDT, ManageOrdersRetail, ManageOrdersWholesale } from './pages/Orders';
+import { CreateOrderTMDT, CreateOrderRetail, CreateOrderWholesale, ManageOrdersTMDT, ManageOrdersRetail, ManageOrdersWholesale, DebtManagement, DebtDashboard } from './pages/Orders';
 import MainLayout from './components/Layout/MainLayout';
 import './App.css';
 
@@ -56,6 +56,9 @@ function App() {
                 <Route path="retail" element={<ManageOrdersRetail />} />
                 <Route path="wholesale" element={<ManageOrdersWholesale />} />
               </Route>
+              
+              <Route path="orders/debt" element={<DebtManagement />} />
+              <Route path="orders/debt/dashboard" element={<DebtDashboard />} />
               
               {/* Sẽ thêm routes khác sau */}
             </Route>

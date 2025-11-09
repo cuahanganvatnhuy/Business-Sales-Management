@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { database } from '../../services/firebase.service';
-import { ref, onValue, push, set } from 'firebase/database';
+import { ref, onValue, push, set, get } from 'firebase/database';
 import {
   Card,
   Form,
@@ -194,6 +194,48 @@ const CreateOrderRetail = () => {
     message.success('Đã xóa sản phẩm!');
   };
 
+  // Generate Order ID
+  const generateOrderId = async (orderType) => {
+    const today = dayjs();
+    const dateStr = today.format('DDMMYY'); // 091125
+    const prefix = orderType === 'retail' ? 'RETAIL' : 'WHOLESALE';
+    
+    try {
+      // Get all orders from salesOrders
+      const ordersRef = ref(database, 'salesOrders');
+      const snapshot = await get(ordersRef);
+      const ordersData = snapshot.val();
+      
+      // Count orders with same prefix and date
+      let maxSequence = 0;
+      if (ordersData) {
+        const searchPrefix = `${prefix}-${dateStr}-`;
+        Object.values(ordersData).forEach(order => {
+          if (order.orderId && order.orderId.startsWith(searchPrefix)) {
+            // Extract sequence number from orderId
+            const sequenceStr = order.orderId.substring(searchPrefix.length);
+            const sequence = parseInt(sequenceStr, 10);
+            if (!isNaN(sequence) && sequence > maxSequence) {
+              maxSequence = sequence;
+            }
+          }
+        });
+      }
+      
+      // Next sequence number
+      const nextSequence = maxSequence + 1;
+      
+      // Pad to 15 digits
+      const sequenceStr = nextSequence.toString().padStart(15, '0');
+      
+      return `${prefix}-${dateStr}-${sequenceStr}`;
+    } catch (error) {
+      console.error('Error generating order ID:', error);
+      // Fallback to timestamp-based ID
+      return `${prefix}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    }
+  };
+
   // Calculate totals
   const calculateTotals = () => {
     const subtotal = productForms.reduce((sum, form) => sum + form.total, 0);
@@ -266,9 +308,12 @@ const CreateOrderRetail = () => {
         profitPerUnit: form.sellingPrice - form.importPrice
       }));
 
+      // Generate orderId
+      const orderId = await generateOrderId('retail');
+
       // Create order object
       const retailOrder = {
-        orderId: `RETAIL-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        orderId: orderId,
         items: items,
         orderDate: selectedDate.format('YYYY-MM-DD'),
         orderTime: selectedTime.format('HH:mm'),
