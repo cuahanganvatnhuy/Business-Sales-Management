@@ -1325,10 +1325,10 @@ const ManageOrdersRetail = () => {
           <Space>
             <Button
               type="primary"
-              icon={<PrinterOutlined />}
+              icon={<PrinterOutlined /> }
               onClick={handlePrintSelected}
               disabled={selectedRowKeys.length === 0}
-              style={{ background: '#007A33', borderColor: '#007A33' }}
+              style={{ background: '#127211ff', borderColor: '#007A33' }}
             >
               In Đã Chọn ({selectedRowKeys.length})
             </Button>
