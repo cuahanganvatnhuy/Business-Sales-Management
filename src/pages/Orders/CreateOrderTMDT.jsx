@@ -448,7 +448,9 @@ const CreateOrderTMDT = () => {
     
     console.log('🔍 Validating stock...', { 
       allItemsCount: allItems.length, 
-      productsCount: products.length 
+      productsCount: products.length,
+      allItems: allItems,
+      productIds: products.map(p => ({ id: p.id, name: p.name }))
     });
     
     // Check if products are loaded

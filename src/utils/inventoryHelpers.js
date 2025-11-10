@@ -13,7 +13,17 @@ export const validateStock = (items, products) => {
   for (const item of items) {
     const product = products.find(p => p.id === item.productId);
     if (!product) {
-      errors.push(`Sản phẩm "${item.productName}" không tồn tại trong kho!`);
+      errors.push(
+        `Sản phẩm "${item.productName}" không tồn tại trong kho! ` +
+        `ProductID: ${item.productId || 'undefined'}. ` +
+        `Vui lòng vào /selling-products và đồng bộ lại sản phẩm này.`
+      );
+      console.error('❌ Product not found:', {
+        itemProductId: item.productId,
+        itemProductName: item.productName,
+        availableProductIds: products.map(p => p.id).slice(0, 5),
+        totalProducts: products.length
+      });
       continue;
     }
     
