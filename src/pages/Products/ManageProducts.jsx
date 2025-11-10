@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Input, Select, Table, Button, Modal, Form, InputNumber, Tag, Row, Col, Statistic, message } from 'antd';
+import { Card, Input, Select, Table, Button, Modal, Form, InputNumber, Tag, Row, Col, Statistic, message, Popconfirm } from 'antd';
 import { 
   PlusOutlined, 
   SearchOutlined, 
@@ -12,7 +12,7 @@ import {
   BoxPlotOutlined
 } from '@ant-design/icons';
 import { database } from '../../services/firebase.service';
-import { ref, onValue, update, remove } from 'firebase/database';
+import { ref, onValue, update, remove, get } from 'firebase/database';
 import { formatCurrency } from '../../utils/format';
 import { useNavigate } from 'react-router-dom';
 import './Products.css';
@@ -34,9 +34,7 @@ const ManageProducts = () => {
   const [statusFilter, setStatusFilter] = useState('');
   
   const [editModalVisible, setEditModalVisible] = useState(false);
-  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
-  const [deletingProduct, setDeletingProduct] = useState(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState([]); // For bulk delete
   
   const [stats, setStats] = useState({
@@ -171,76 +169,6 @@ const ManageProducts = () => {
     }
   };
 
-  // Delete product
-  const handleDelete = (product) => {
-    console.log('🗑️ Delete clicked:', product);
-    setDeletingProduct(product);
-    setDeleteModalVisible(true);
-    console.log('Modal should open now...');
-  };
-
-  // Confirm delete
-  const handleConfirmDelete = async () => {
-    console.log('✅ Confirm delete:', deletingProduct);
-    try {
-      if (!deletingProduct || !deletingProduct.id) {
-        message.error('Không tìm thấy sản phẩm cần xóa!');
-        return;
-      }
-      
-      const productRef = ref(database, `products/${deletingProduct.id}`);
-      await remove(productRef);
-      
-      console.log('✅ Deleted successfully');
-      message.success('Xóa sản phẩm thành công!');
-      setDeleteModalVisible(false);
-      setDeletingProduct(null);
-    } catch (error) {
-      console.error('❌ Delete error:', error);
-      message.error('Lỗi xóa sản phẩm: ' + error.message);
-    }
-  };
-
-  // Bulk delete products
-  const handleBulkDelete = () => {
-    if (selectedRowKeys.length === 0) {
-      message.warning('Vui lòng chọn sản phẩm cần xóa!');
-      return;
-    }
-
-    Modal.confirm({
-      title: 'Xác Nhận Xóa Hàng Loạt',
-      content: (
-        <div>
-          <p>Bạn có chắc chắn muốn xóa <strong>{selectedRowKeys.length}</strong> sản phẩm đã chọn?</p>
-          <p style={{ color: '#ff4d4f', marginTop: 8 }}>
-            ⚠️ Hành động này không thể hoàn tác!
-          </p>
-        </div>
-      ),
-      okText: 'Xóa',
-      cancelText: 'Hủy',
-      okType: 'danger',
-      centered: true,
-      onOk: async () => {
-        try {
-          // Delete all selected products
-          const deletePromises = selectedRowKeys.map(productId => {
-            const productRef = ref(database, `products/${productId}`);
-            return remove(productRef);
-          });
-
-          await Promise.all(deletePromises);
-          
-          message.success(`Đã xóa ${selectedRowKeys.length} sản phẩm thành công!`);
-          setSelectedRowKeys([]);
-        } catch (error) {
-          message.error('Lỗi xóa sản phẩm: ' + error.message);
-        }
-      }
-    });
-  };
-
   // Export Excel
   const handleExport = () => {
     try {
@@ -367,15 +295,47 @@ const ManageProducts = () => {
               handleEdit(record);
             }}
           />
-          <Button 
-            danger 
-            icon={<DeleteOutlined />} 
-            size="small"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleDelete(record);
+          <Popconfirm
+            title="Xác nhận xóa"
+            description={`Bạn có chắc muốn xóa "${record.name}"?`}
+            onConfirm={async () => {
+              try {
+                // Delete product
+                const productRef = ref(database, `products/${record.id}`);
+                await remove(productRef);
+                
+                // Also delete from sellingProducts if exists
+                const sellingProductsRef = ref(database, 'sellingProducts');
+                const snapshot = await get(sellingProductsRef);
+                if (snapshot.exists()) {
+                  const sellingProducts = snapshot.val();
+                  const deletePromises = [];
+                  Object.keys(sellingProducts).forEach(key => {
+                    if (sellingProducts[key].productId === record.id) {
+                      deletePromises.push(remove(ref(database, `sellingProducts/${key}`)));
+                    }
+                  });
+                  if (deletePromises.length > 0) {
+                    await Promise.all(deletePromises);
+                  }
+                }
+                
+                message.success('Xóa sản phẩm thành công!');
+              } catch (error) {
+                message.error('Lỗi xóa sản phẩm: ' + error.message);
+              }
             }}
-          />
+            okText="Xóa"
+            cancelText="Hủy"
+            okButtonProps={{ danger: true }}
+          >
+            <Button 
+              danger 
+              icon={<DeleteOutlined />} 
+              size="small"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </Popconfirm>
         </div>
       )
     }
@@ -392,13 +352,53 @@ const ManageProducts = () => {
         </div>
         <div style={{ display: 'flex', gap: '12px' }}>
           {selectedRowKeys.length > 0 && (
-            <Button 
-              danger 
-              icon={<DeleteOutlined />} 
-              onClick={handleBulkDelete}
+            <Popconfirm
+              title="Xác nhận xóa hàng loạt"
+              description={`Bạn có chắc muốn xóa ${selectedRowKeys.length} sản phẩm đã chọn?`}
+              onConfirm={async () => {
+                try {
+                  console.log('🗑️ Bulk deleting:', selectedRowKeys);
+                  
+                  // Delete products
+                  const deleteProductPromises = selectedRowKeys.map(productId => {
+                    const productRef = ref(database, `products/${productId}`);
+                    return remove(productRef);
+                  });
+                  await Promise.all(deleteProductPromises);
+                  
+                  // Also delete from sellingProducts
+                  const sellingProductsRef = ref(database, 'sellingProducts');
+                  const snapshot = await get(sellingProductsRef);
+                  if (snapshot.exists()) {
+                    const sellingProducts = snapshot.val();
+                    const deleteSellingPromises = [];
+                    Object.keys(sellingProducts).forEach(key => {
+                      if (selectedRowKeys.includes(sellingProducts[key].productId)) {
+                        deleteSellingPromises.push(remove(ref(database, `sellingProducts/${key}`)));
+                      }
+                    });
+                    if (deleteSellingPromises.length > 0) {
+                      await Promise.all(deleteSellingPromises);
+                    }
+                  }
+                  
+                  message.success(`Đã xóa ${selectedRowKeys.length} sản phẩm thành công!`);
+                  setSelectedRowKeys([]);
+                } catch (error) {
+                  message.error('Lỗi xóa sản phẩm: ' + error.message);
+                }
+              }}
+              okText="Xóa"
+              cancelText="Hủy"
+              okButtonProps={{ danger: true }}
             >
-              Xóa Đã Chọn ({selectedRowKeys.length})
-            </Button>
+              <Button 
+                danger 
+                icon={<DeleteOutlined />}
+              >
+                Xóa Đã Chọn ({selectedRowKeys.length})
+              </Button>
+            </Popconfirm>
           )}
           <Button icon={<DownloadOutlined />} onClick={handleExport}>
             Xuất Excel
@@ -601,29 +601,6 @@ const ManageProducts = () => {
         </Form>
       </Modal>
 
-      {/* Delete Confirmation Modal */}
-      <Modal
-        title="Xác Nhận Xóa"
-        open={deleteModalVisible}
-        onOk={handleConfirmDelete}
-        onCancel={() => {
-          setDeleteModalVisible(false);
-          setDeletingProduct(null);
-        }}
-        okText="Xóa"
-        cancelText="Hủy"
-        okButtonProps={{ danger: true }}
-      >
-        <div style={{ textAlign: 'center', padding: '20px' }}>
-          <ExclamationCircleOutlined style={{ fontSize: '48px', color: '#ff4d4f' }} />
-          <p style={{ marginTop: '16px', fontSize: '16px' }}>
-            Bạn có chắc chắn muốn xóa sản phẩm này không?
-          </p>
-          <p style={{ color: '#ff4d4f', fontWeight: 'bold' }}>
-            Hành động này không thể hoàn tác!
-          </p>
-        </div>
-      </Modal>
     </div>
   );
 };
