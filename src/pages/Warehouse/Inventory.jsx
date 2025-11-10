@@ -87,11 +87,11 @@ const Inventory = () => {
     
     if (statusFilter !== 'all') {
       if (statusFilter === 'out') {
-        filtered = filtered.filter(p => p.inventory === 0);
+        filtered = filtered.filter(p => p.stock === 0);
       } else if (statusFilter === 'low') {
-        filtered = filtered.filter(p => p.inventory > 0 && p.inventory < 10);
+        filtered = filtered.filter(p => p.stock > 0 && p.stock < 10);
       } else if (statusFilter === 'in') {
-        filtered = filtered.filter(p => p.inventory >= 10);
+        filtered = filtered.filter(p => p.stock >= 10);
       }
     }
     
@@ -100,9 +100,9 @@ const Inventory = () => {
 
   // Calculate statistics
   const totalProducts = products.length;
-  const totalValue = products.reduce((sum, p) => sum + ((p.price || 0) * (p.inventory || 0)), 0);
-  const lowStock = products.filter(p => p.inventory > 0 && p.inventory < 10).length;
-  const outOfStock = products.filter(p => p.inventory === 0).length;
+  const totalValue = products.reduce((sum, p) => sum + ((p.price || 0) * (p.stock || 0)), 0);
+  const lowStock = products.filter(p => p.stock > 0 && p.stock < 10).length;
+  const outOfStock = products.filter(p => p.stock === 0).length;
 
   // Handle adjust inventory (single or bulk)
   const handleAdjust = async () => {
@@ -124,8 +124,8 @@ const Inventory = () => {
       
       // Check all products can be adjusted
       for (const product of productsToAdjust) {
-        const newInventory = (product.inventory || 0) + adjustQuantity;
-        if (newInventory < 0) {
+        const newStock = (product.stock || 0) + adjustQuantity;
+        if (newStock < 0) {
           message.error(`Sản phẩm "${product.name}" không đủ tồn kho để điều chỉnh!`);
           return;
         }
@@ -133,8 +133,8 @@ const Inventory = () => {
       
       // Apply adjustments
       productsToAdjust.forEach((product, index) => {
-        const newInventory = (product.inventory || 0) + adjustQuantity;
-        updates[`products/${product.id}/inventory`] = newInventory;
+        const newStock = (product.stock || 0) + adjustQuantity;
+        updates[`products/${product.id}/stock`] = newStock;
         updates[`products/${product.id}/updatedAt`] = new Date().toISOString();
         
         // Log transaction
@@ -145,8 +145,8 @@ const Inventory = () => {
           sku: product.sku,
           type: adjustQuantity > 0 ? 'import' : 'export',
           quantity: Math.abs(adjustQuantity),
-          beforeQuantity: product.inventory || 0,
-          afterQuantity: newInventory,
+          beforeQuantity: product.stock || 0,
+          afterQuantity: newStock,
           reason: adjustReason || 'Điều chỉnh tồn kho',
           createdAt: new Date().toISOString()
         };
@@ -173,10 +173,10 @@ const Inventory = () => {
       'SKU': p.sku,
       'Danh Mục': categories.find(c => c.id === p.categoryId)?.name || 'N/A',
       'Đơn Vị': p.unit,
-      'Tồn Kho': p.inventory || 0,
+      'Tồn Kho': p.stock || 0,
       'Giá Nhập': p.price || 0,
-      'Giá Trị': (p.price || 0) * (p.inventory || 0),
-      'Trạng Thái': p.inventory === 0 ? 'Hết hàng' : p.inventory < 10 ? 'Sắp hết' : 'Còn hàng'
+      'Giá Trị': (p.price || 0) * (p.stock || 0),
+      'Trạng Thái': p.stock === 0 ? 'Hết hàng' : p.stock < 10 ? 'Sắp hết' : 'Còn hàng'
     }));
     
     const ws = XLSX.utils.json_to_sheet(data);
@@ -222,12 +222,12 @@ const Inventory = () => {
     },
     {
       title: 'Tồn Kho',
-      dataIndex: 'inventory',
-      key: 'inventory',
+      dataIndex: 'stock',
+      key: 'stock',
       width: 100,
       align: 'center',
-      sorter: (a, b) => (a.inventory || 0) - (b.inventory || 0),
-      render: (inv) => <span style={{ fontWeight: 'bold' }}>{inv || 0}</span>
+      sorter: (a, b) => (a.stock || 0) - (b.stock || 0),
+      render: (stock) => <span style={{ fontWeight: 'bold' }}>{stock || 0}</span>
     },
     {
       title: 'Giá Nhập',
@@ -243,7 +243,7 @@ const Inventory = () => {
       width: 120,
       align: 'right',
       render: (_, record) => {
-        const value = (record.price || 0) * (record.inventory || 0);
+        const value = (record.price || 0) * (record.stock || 0);
         return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
       }
     },
@@ -253,8 +253,8 @@ const Inventory = () => {
       width: 100,
       align: 'center',
       render: (_, record) => {
-        if (record.inventory === 0) return <Tag color="red">Hết hàng</Tag>;
-        if (record.inventory < 10) return <Tag color="orange">Sắp hết</Tag>;
+        if (record.stock === 0) return <Tag color="red">Hết hàng</Tag>;
+        if (record.stock < 10) return <Tag color="orange">Sắp hết</Tag>;
         return <Tag color="green">Còn hàng</Tag>;
       }
     },
@@ -453,7 +453,7 @@ const Inventory = () => {
                 <strong>SKU:</strong> {selectedProduct.sku}
               </div>
               <div>
-                <strong>Tồn kho hiện tại:</strong> <span style={{ fontSize: 18, fontWeight: 'bold', color: '#1890ff' }}>{selectedProduct.inventory || 0}</span>
+                <strong>Tồn kho hiện tại:</strong> <span style={{ fontSize: 18, fontWeight: 'bold', color: '#1890ff' }}>{selectedProduct.stock || 0}</span>
               </div>
             </>
           ) : (
@@ -496,7 +496,7 @@ const Inventory = () => {
             <div style={{ padding: 12, background: '#f0f9ff', borderRadius: 8, border: '1px solid #1890ff' }}>
               <strong>Tồn kho sau điều chỉnh:</strong>{' '}
               <span style={{ fontSize: 18, fontWeight: 'bold', color: adjustQuantity > 0 ? '#52c41a' : '#f5222d' }}>
-                {(selectedProduct.inventory || 0) + adjustQuantity}
+                {(selectedProduct.stock || 0) + adjustQuantity}
               </span>
             </div>
           )}
