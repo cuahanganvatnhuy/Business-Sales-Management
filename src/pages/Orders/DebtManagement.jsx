@@ -32,7 +32,8 @@ import {
   MoneyCollectOutlined,
   MoreOutlined,
   HistoryOutlined,
-  FileTextOutlined
+  FileTextOutlined,
+  EllipsisOutlined
 } from '@ant-design/icons';
 import { formatCurrency } from '../../utils/format';
 import dayjs from 'dayjs';
@@ -736,7 +737,7 @@ const DebtManagement = () => {
             placement="bottomRight"
           >
             <Button
-              icon={<MoreOutlined />}
+              icon={<EllipsisOutlined style={{ fontSize: 20, fontWeight: 'bold' }} />}
               size="small"
             />
           </Dropdown>
