@@ -80,9 +80,19 @@ const SellingProducts = () => {
     });
   }, []);
 
+  // JOIN sellingProducts with products to get real-time inventory
+  const enrichedSellingProducts = sellingProducts.map(sp => {
+    const product = products.find(p => p.id === sp.productId);
+    return {
+      ...sp,
+      inventory: product?.stock || 0, // Get inventory from products table
+      realInventory: product?.stock || 0
+    };
+  });
+
   // Filter products
   useEffect(() => {
-    let filtered = [...sellingProducts];
+    let filtered = [...enrichedSellingProducts];
 
     if (searchText) {
       filtered = filtered.filter(p =>
@@ -96,7 +106,7 @@ const SellingProducts = () => {
     }
 
     setFilteredProducts(filtered);
-  }, [searchText, statusFilter, sellingProducts]);
+  }, [searchText, statusFilter, sellingProducts, products]);
 
   // Statistics
   const stats = {
@@ -171,7 +181,6 @@ const SellingProducts = () => {
             sku: product.sku,
             importPrice: product.price || 0,
             sellingPrice: 0,
-            inventory: product.stock || 0,
             unit: product.unit || 'cái',
             purchaseCount: 0,
             status: 'inactive',
@@ -234,7 +243,6 @@ const SellingProducts = () => {
             sku: product.sku,
             importPrice: product.price || 0,
             sellingPrice: 0,
-            inventory: product.stock || 0,
             unit: product.unit || 'cái',
             purchaseCount: 0,
             status: 'inactive',
