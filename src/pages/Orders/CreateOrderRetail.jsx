@@ -41,6 +41,7 @@ import {
 } from '@ant-design/icons';
 import { formatCurrency } from '../../utils/format';
 import { printRetailInvoice } from '../../utils/printInvoice';
+import { validateStock, deductStock, checkStockAvailability } from '../../utils/inventoryHelpers';
 import dayjs from 'dayjs';
 import './Orders.css';
 
@@ -62,12 +63,11 @@ const CreateOrderRetail = () => {
   const navigate = useNavigate();
   const { selectedStore } = useStore();
   const [mainForm] = Form.useForm();
+  const [products, setProducts] = useState([]); // Products with stock info
+  const [loading, setLoading] = useState(false);
 
   // State
   const [sellingProducts, setSellingProducts] = useState([]);
-  const [loading, setLoading] = useState(false);
-
-  // Customer & Order info
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [selectedDate, setSelectedDate] = useState(dayjs());
@@ -103,6 +103,25 @@ const CreateOrderRetail = () => {
             ...data[key]
           }));
         setSellingProducts(productsArray);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Load products for stock validation
+  useEffect(() => {
+    const productsRef = ref(database, 'products');
+    const unsubscribe = onValue(productsRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const productsList = Object.entries(data).map(([id, product]) => ({
+          id,
+          ...product
+        }));
+        setProducts(productsList);
+      } else {
+        setProducts([]);
       }
     });
 
@@ -302,6 +321,34 @@ const CreateOrderRetail = () => {
       return;
     }
 
+    // Validate stock for all items
+    const allItems = productForms.map(form => ({
+      productId: form.productId,
+      productName: form.productName,
+      quantity: form.quantity,
+      sku: form.sku
+    }));
+    const stockValidation = validateStock(allItems, products);
+    
+    if (!stockValidation.valid) {
+      Modal.error({
+        title: 'Không đủ hàng trong kho!',
+        content: (
+          <div>
+            {stockValidation.errors.map((error, index) => (
+              <div key={index} style={{ marginBottom: 8, color: '#ff4d4f' }}>
+                • {error}
+              </div>
+            ))}
+          </div>
+        ),
+        okText: 'Đã hiểu',
+        centered: true,
+        width: 600
+      });
+      return;
+    }
+
     try {
       setLoading(true);
 
@@ -352,6 +399,10 @@ const CreateOrderRetail = () => {
       // Save to Firebase
       const ordersRef = ref(database, 'salesOrders');
       await push(ordersRef, retailOrder);
+
+      // Deduct stock for all items
+      await deductStock(items, products, orderId, 'retail');
+      console.log('✅ Stock deducted successfully for retail order');
 
       // Save order data and product count before reset
       setCreatedProductCount(items.length);
