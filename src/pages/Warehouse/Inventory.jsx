@@ -8,7 +8,7 @@ import {
 import {
   InboxOutlined, DollarOutlined, WarningOutlined, StopOutlined,
   PlusOutlined, ImportOutlined, ExportOutlined, EditOutlined,
-  SearchOutlined, FileExcelOutlined
+  SearchOutlined, FileExcelOutlined, DeleteOutlined
 } from '@ant-design/icons';
 import * as XLSX from 'xlsx';
 import dayjs from 'dayjs';
@@ -26,6 +26,9 @@ const Inventory = () => {
   const [searchText, setSearchText] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  
+  // Selection
+  const [selectedRowKeys, setSelectedRowKeys] = useState([]);
   
   // Modals
   const [importModalVisible, setImportModalVisible] = useState(false);
@@ -101,44 +104,59 @@ const Inventory = () => {
   const lowStock = products.filter(p => p.inventory > 0 && p.inventory < 10).length;
   const outOfStock = products.filter(p => p.inventory === 0).length;
 
-  // Handle adjust inventory
+  // Handle adjust inventory (single or bulk)
   const handleAdjust = async () => {
-    if (!selectedProduct || adjustQuantity === 0) {
+    if (adjustQuantity === 0) {
       message.error('Vui lòng nhập số lượng điều chỉnh!');
       return;
     }
     
     try {
-      const newInventory = (selectedProduct.inventory || 0) + adjustQuantity;
-      if (newInventory < 0) {
-        message.error('Số lượng tồn kho không thể âm!');
+      const updates = {};
+      const productsToAdjust = selectedProduct 
+        ? [selectedProduct] 
+        : products.filter(p => selectedRowKeys.includes(p.id));
+      
+      if (productsToAdjust.length === 0) {
+        message.error('Vui lòng chọn sản phẩm!');
         return;
       }
       
-      const updates = {
-        [`products/${selectedProduct.id}/inventory`]: newInventory,
-        [`products/${selectedProduct.id}/updatedAt`]: new Date().toISOString()
-      };
+      // Check all products can be adjusted
+      for (const product of productsToAdjust) {
+        const newInventory = (product.inventory || 0) + adjustQuantity;
+        if (newInventory < 0) {
+          message.error(`Sản phẩm "${product.name}" không đủ tồn kho để điều chỉnh!`);
+          return;
+        }
+      }
       
-      // Log transaction
-      const transactionRef = ref(database, 'warehouseTransactions');
-      const transactionId = `txn_${Date.now()}`;
-      updates[`warehouseTransactions/${transactionId}`] = {
-        productId: selectedProduct.id,
-        productName: selectedProduct.name,
-        sku: selectedProduct.sku,
-        type: adjustQuantity > 0 ? 'import' : 'export',
-        quantity: Math.abs(adjustQuantity),
-        beforeQuantity: selectedProduct.inventory || 0,
-        afterQuantity: newInventory,
-        reason: adjustReason || 'Điều chỉnh tồn kho',
-        createdAt: new Date().toISOString()
-      };
+      // Apply adjustments
+      productsToAdjust.forEach((product, index) => {
+        const newInventory = (product.inventory || 0) + adjustQuantity;
+        updates[`products/${product.id}/inventory`] = newInventory;
+        updates[`products/${product.id}/updatedAt`] = new Date().toISOString();
+        
+        // Log transaction
+        const transactionId = `txn_${Date.now()}_${index}`;
+        updates[`warehouseTransactions/${transactionId}`] = {
+          productId: product.id,
+          productName: product.name,
+          sku: product.sku,
+          type: adjustQuantity > 0 ? 'import' : 'export',
+          quantity: Math.abs(adjustQuantity),
+          beforeQuantity: product.inventory || 0,
+          afterQuantity: newInventory,
+          reason: adjustReason || 'Điều chỉnh tồn kho',
+          createdAt: new Date().toISOString()
+        };
+      });
       
       await update(ref(database), updates);
-      message.success('Điều chỉnh tồn kho thành công!');
+      message.success(`Đã điều chỉnh ${productsToAdjust.length} sản phẩm thành công!`);
       setAdjustModalVisible(false);
       setSelectedProduct(null);
+      setSelectedRowKeys([]);
       setAdjustQuantity(0);
       setAdjustReason('');
     } catch (error) {
@@ -323,13 +341,26 @@ const Inventory = () => {
       <Card title="Danh Sách Sản Phẩm Kho" style={{ marginBottom: 24, borderRadius: 12 }}>
         <Space direction="vertical" style={{ width: '100%' }} size="large">
           {/* Action Buttons */}
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
             <Button type="primary" icon={<PlusOutlined />}>Nhập Kho Thêm</Button>
             <Button icon={<ImportOutlined />} style={{ background: '#52c41a', color: 'white', borderColor: '#52c41a' }}>
               Tạo Sản Phẩm Mới Vào Kho
             </Button>
             <Button icon={<ExportOutlined />}>Xuất Kho</Button>
             <Button icon={<EditOutlined />}>Điều Chỉnh</Button>
+            {selectedRowKeys.length > 0 && (
+              <Button 
+                type="primary"
+                danger
+                icon={<EditOutlined />}
+                onClick={() => {
+                  setSelectedProduct(null);
+                  setAdjustModalVisible(true);
+                }}
+              >
+                Điều Chỉnh Đã Chọn ({selectedRowKeys.length})
+              </Button>
+            )}
             <Button icon={<FileExcelOutlined />} onClick={exportExcel} style={{ background: '#52c41a', color: 'white', borderColor: '#52c41a' }}>
               Xuất Báo Cáo
             </Button>
@@ -380,6 +411,15 @@ const Inventory = () => {
             dataSource={filteredProducts}
             rowKey="id"
             loading={loading}
+            rowSelection={{
+              selectedRowKeys,
+              onChange: (keys) => setSelectedRowKeys(keys),
+              selections: [
+                Table.SELECTION_ALL,
+                Table.SELECTION_INVERT,
+                Table.SELECTION_NONE,
+              ],
+            }}
             pagination={{ pageSize: 10, showSizeChanger: true }}
             scroll={{ x: 1400 }}
           />
@@ -388,61 +428,79 @@ const Inventory = () => {
 
       {/* Adjust Modal */}
       <Modal
-        title="Điều Chỉnh Tồn Kho"
+        title={selectedProduct ? "Điều Chỉnh Tồn Kho" : `Điều Chỉnh Hàng Loạt (${selectedRowKeys.length} sản phẩm)`}
         open={adjustModalVisible}
         onOk={handleAdjust}
         onCancel={() => {
           setAdjustModalVisible(false);
           setSelectedProduct(null);
+          setSelectedRowKeys([]);
           setAdjustQuantity(0);
           setAdjustReason('');
         }}
         okText="Lưu"
         cancelText="Hủy"
+        width={selectedProduct ? 600 : 700}
       >
-        {selectedProduct && (
-          <Space direction="vertical" style={{ width: '100%' }} size="middle">
-            <div>
-              <strong>Sản phẩm:</strong> {selectedProduct.name}
-            </div>
-            <div>
-              <strong>SKU:</strong> {selectedProduct.sku}
-            </div>
-            <div>
-              <strong>Tồn kho hiện tại:</strong> <span style={{ fontSize: 18, fontWeight: 'bold', color: '#1890ff' }}>{selectedProduct.inventory || 0}</span>
-            </div>
-            <div>
-              <label>Số lượng điều chỉnh:</label>
-              <InputNumber
-                value={adjustQuantity}
-                onChange={setAdjustQuantity}
-                style={{ width: '100%', marginTop: 8 }}
-                placeholder="Nhập số dương để tăng, số âm để giảm"
-              />
-              <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
-                Nhập số dương để tăng, số âm để giảm
+        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          {selectedProduct ? (
+            // Single product adjustment
+            <>
+              <div>
+                <strong>Sản phẩm:</strong> {selectedProduct.name}
+              </div>
+              <div>
+                <strong>SKU:</strong> {selectedProduct.sku}
+              </div>
+              <div>
+                <strong>Tồn kho hiện tại:</strong> <span style={{ fontSize: 18, fontWeight: 'bold', color: '#1890ff' }}>{selectedProduct.inventory || 0}</span>
+              </div>
+            </>
+          ) : (
+            // Bulk adjustment
+            <div style={{ padding: 12, background: '#fff7e6', borderRadius: 8, border: '1px solid #faad14' }}>
+              <div style={{ marginBottom: 8 }}>
+                <strong>⚠️ Điều chỉnh hàng loạt {selectedRowKeys.length} sản phẩm</strong>
+              </div>
+              <div style={{ fontSize: 13, color: '#666' }}>
+                Số lượng điều chỉnh sẽ được áp dụng cho tất cả {selectedRowKeys.length} sản phẩm đã chọn.
               </div>
             </div>
-            <div>
-              <label>Lý do:</label>
-              <Input.TextArea
-                value={adjustReason}
-                onChange={(e) => setAdjustReason(e.target.value)}
-                rows={3}
-                placeholder="Nhập lý do điều chỉnh..."
-                style={{ marginTop: 8 }}
-              />
+          )}
+          
+          <div>
+            <label>Số lượng điều chỉnh:</label>
+            <InputNumber
+              value={adjustQuantity}
+              onChange={setAdjustQuantity}
+              style={{ width: '100%', marginTop: 8 }}
+              placeholder="Nhập số dương để tăng, số âm để giảm"
+            />
+            <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
+              Nhập số dương để tăng, số âm để giảm
             </div>
-            {adjustQuantity !== 0 && (
-              <div style={{ padding: 12, background: '#f0f9ff', borderRadius: 8, border: '1px solid #1890ff' }}>
-                <strong>Tồn kho sau điều chỉnh:</strong>{' '}
-                <span style={{ fontSize: 18, fontWeight: 'bold', color: adjustQuantity > 0 ? '#52c41a' : '#f5222d' }}>
-                  {(selectedProduct.inventory || 0) + adjustQuantity}
-                </span>
-              </div>
-            )}
-          </Space>
-        )}
+          </div>
+          
+          <div>
+            <label>Lý do:</label>
+            <Input.TextArea
+              value={adjustReason}
+              onChange={(e) => setAdjustReason(e.target.value)}
+              rows={3}
+              placeholder="Nhập lý do điều chỉnh..."
+              style={{ marginTop: 8 }}
+            />
+          </div>
+          
+          {selectedProduct && adjustQuantity !== 0 && (
+            <div style={{ padding: 12, background: '#f0f9ff', borderRadius: 8, border: '1px solid #1890ff' }}>
+              <strong>Tồn kho sau điều chỉnh:</strong>{' '}
+              <span style={{ fontSize: 18, fontWeight: 'bold', color: adjustQuantity > 0 ? '#52c41a' : '#f5222d' }}>
+                {(selectedProduct.inventory || 0) + adjustQuantity}
+              </span>
+            </div>
+          )}
+        </Space>
       </Modal>
     </div>
   );
