@@ -37,6 +37,7 @@ const ManageProducts = () => {
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [deletingProduct, setDeletingProduct] = useState(null);
+  const [selectedRowKeys, setSelectedRowKeys] = useState([]); // For bulk delete
   
   const [stats, setStats] = useState({
     total: 0,
@@ -172,22 +173,72 @@ const ManageProducts = () => {
 
   // Delete product
   const handleDelete = (product) => {
+    console.log('🗑️ Delete clicked:', product);
     setDeletingProduct(product);
     setDeleteModalVisible(true);
+    console.log('Modal should open now...');
   };
 
   // Confirm delete
   const handleConfirmDelete = async () => {
+    console.log('✅ Confirm delete:', deletingProduct);
     try {
+      if (!deletingProduct || !deletingProduct.id) {
+        message.error('Không tìm thấy sản phẩm cần xóa!');
+        return;
+      }
+      
       const productRef = ref(database, `products/${deletingProduct.id}`);
       await remove(productRef);
       
+      console.log('✅ Deleted successfully');
       message.success('Xóa sản phẩm thành công!');
       setDeleteModalVisible(false);
       setDeletingProduct(null);
     } catch (error) {
+      console.error('❌ Delete error:', error);
       message.error('Lỗi xóa sản phẩm: ' + error.message);
     }
+  };
+
+  // Bulk delete products
+  const handleBulkDelete = () => {
+    if (selectedRowKeys.length === 0) {
+      message.warning('Vui lòng chọn sản phẩm cần xóa!');
+      return;
+    }
+
+    Modal.confirm({
+      title: 'Xác Nhận Xóa Hàng Loạt',
+      content: (
+        <div>
+          <p>Bạn có chắc chắn muốn xóa <strong>{selectedRowKeys.length}</strong> sản phẩm đã chọn?</p>
+          <p style={{ color: '#ff4d4f', marginTop: 8 }}>
+            ⚠️ Hành động này không thể hoàn tác!
+          </p>
+        </div>
+      ),
+      okText: 'Xóa',
+      cancelText: 'Hủy',
+      okType: 'danger',
+      centered: true,
+      onOk: async () => {
+        try {
+          // Delete all selected products
+          const deletePromises = selectedRowKeys.map(productId => {
+            const productRef = ref(database, `products/${productId}`);
+            return remove(productRef);
+          });
+
+          await Promise.all(deletePromises);
+          
+          message.success(`Đã xóa ${selectedRowKeys.length} sản phẩm thành công!`);
+          setSelectedRowKeys([]);
+        } catch (error) {
+          message.error('Lỗi xóa sản phẩm: ' + error.message);
+        }
+      }
+    });
   };
 
   // Export Excel
@@ -306,18 +357,24 @@ const ManageProducts = () => {
       width: 120,
       align: 'center',
       render: (_, record) => (
-        <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+        <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }} onClick={(e) => e.stopPropagation()}>
           <Button 
             type="primary" 
             icon={<EditOutlined />} 
             size="small"
-            onClick={() => handleEdit(record)}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleEdit(record);
+            }}
           />
           <Button 
             danger 
             icon={<DeleteOutlined />} 
             size="small"
-            onClick={() => handleDelete(record)}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDelete(record);
+            }}
           />
         </div>
       )
@@ -334,6 +391,15 @@ const ManageProducts = () => {
           </h1>
         </div>
         <div style={{ display: 'flex', gap: '12px' }}>
+          {selectedRowKeys.length > 0 && (
+            <Button 
+              danger 
+              icon={<DeleteOutlined />} 
+              onClick={handleBulkDelete}
+            >
+              Xóa Đã Chọn ({selectedRowKeys.length})
+            </Button>
+          )}
           <Button icon={<DownloadOutlined />} onClick={handleExport}>
             Xuất Excel
           </Button>
@@ -435,6 +501,16 @@ const ManageProducts = () => {
           <Table
             columns={columns}
             dataSource={filteredProducts}
+            rowKey="id"
+            rowSelection={{
+              selectedRowKeys,
+              onChange: (keys) => setSelectedRowKeys(keys),
+              selections: [
+                Table.SELECTION_ALL,
+                Table.SELECTION_INVERT,
+                Table.SELECTION_NONE,
+              ],
+            }}
             pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (total) => `Tổng ${total} sản phẩm` }}
             scroll={{ x: 1200 }}
           />
