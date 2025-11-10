@@ -491,7 +491,7 @@ const CreateOrderWholesale = () => {
       return;
     }
     
-    const stockValidation = validateStock(allItems, products);
+    const stockValidation = validateStock(allItems, products, sellingProducts);
     
     console.log('📊 [Wholesale] Validation result:', stockValidation);
     
@@ -575,7 +575,7 @@ const CreateOrderWholesale = () => {
       await push(ordersRef, wholesaleOrder);
 
       // Deduct stock for all items
-      await deductStock(items, products, orderId, 'wholesale');
+      await deductStock(items, products, orderId, 'wholesale', sellingProducts);
       console.log('✅ Stock deducted successfully for wholesale order');
 
       // Save customer if checkbox is checked and not already selected from list

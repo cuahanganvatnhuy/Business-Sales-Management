@@ -345,7 +345,7 @@ const CreateOrderRetail = () => {
       return;
     }
     
-    const stockValidation = validateStock(allItems, products);
+    const stockValidation = validateStock(allItems, products, sellingProducts);
     
     console.log('📊 [Retail] Validation result:', stockValidation);
     
@@ -422,7 +422,7 @@ const CreateOrderRetail = () => {
       await push(ordersRef, retailOrder);
 
       // Deduct stock for all items
-      await deductStock(items, products, orderId, 'retail');
+      await deductStock(items, products, orderId, 'retail', sellingProducts);
       console.log('✅ Stock deducted successfully for retail order');
 
       // Save order data and product count before reset
