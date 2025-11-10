@@ -445,7 +445,26 @@ const CreateOrderTMDT = () => {
 
     // Validate stock for all items in all orders
     const allItems = orderForms.flatMap(form => form.items);
+    
+    console.log('🔍 Validating stock...', { 
+      allItemsCount: allItems.length, 
+      productsCount: products.length 
+    });
+    
+    // Check if products are loaded
+    if (products.length === 0) {
+      Modal.warning({
+        title: 'Đang tải dữ liệu kho',
+        content: 'Vui lòng đợi dữ liệu kho hàng tải xong rồi thử lại!',
+        okText: 'Đã hiểu',
+        centered: true
+      });
+      return;
+    }
+    
     const stockValidation = validateStock(allItems, products);
+    
+    console.log('📊 Validation result:', stockValidation);
     
     if (!stockValidation.valid) {
       Modal.error({
@@ -465,6 +484,8 @@ const CreateOrderTMDT = () => {
       });
       return;
     }
+    
+    console.log('✅ Stock validation passed, creating orders...');
 
     try {
       // Show progress modal

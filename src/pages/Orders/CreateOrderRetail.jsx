@@ -328,7 +328,26 @@ const CreateOrderRetail = () => {
       quantity: form.quantity,
       sku: form.sku
     }));
+    
+    console.log('🔍 [Retail] Validating stock...', { 
+      allItemsCount: allItems.length, 
+      productsCount: products.length 
+    });
+    
+    // Check if products are loaded
+    if (products.length === 0) {
+      Modal.warning({
+        title: 'Đang tải dữ liệu kho',
+        content: 'Vui lòng đợi dữ liệu kho hàng tải xong rồi thử lại!',
+        okText: 'Đã hiểu',
+        centered: true
+      });
+      return;
+    }
+    
     const stockValidation = validateStock(allItems, products);
+    
+    console.log('📊 [Retail] Validation result:', stockValidation);
     
     if (!stockValidation.valid) {
       Modal.error({
@@ -348,6 +367,8 @@ const CreateOrderRetail = () => {
       });
       return;
     }
+    
+    console.log('✅ [Retail] Stock validation passed, creating order...');
 
     try {
       setLoading(true);

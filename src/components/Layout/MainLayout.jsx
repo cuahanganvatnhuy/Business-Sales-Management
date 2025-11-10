@@ -156,11 +156,6 @@ const MainLayout = () => {
       label: 'Quản Lý Cửa Hàng',
     },
     {
-      key: '/reports',
-      icon: <i className="fas fa-chart-bar" />,
-      label: 'Báo Cáo',
-    },
-    {
       key: 'finance',
       icon: <i className="fas fa-coins" />,
       label: 'Quản Lý Tài Chính',
