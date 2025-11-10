@@ -197,9 +197,31 @@ const MainLayout = () => {
       label: 'Báo Cáo',
     },
     {
-      key: '/warehouse',
+      key: 'warehouse',
       icon: <InboxOutlined />,
       label: 'Quản Lý Kho',
+      children: [
+        {
+          key: '/warehouse/inventory',
+          icon: <InboxOutlined />,
+          label: 'Kho Hàng',
+        },
+        {
+          key: '/warehouse/transactions',
+          icon: <i className="fas fa-exchange-alt" />,
+          label: 'Quản Lý Giao Dịch',
+        },
+        {
+          key: '/warehouse/usage-report',
+          icon: <LineChartOutlined />,
+          label: 'Báo Cáo Sử Dụng',
+        },
+        {
+          key: '/warehouse/order-report',
+          icon: <ShoppingCartOutlined />,
+          label: 'Báo Cáo Đơn Hàng',
+        },
+      ]
     },
     {
       key: '/shipping-costs',
