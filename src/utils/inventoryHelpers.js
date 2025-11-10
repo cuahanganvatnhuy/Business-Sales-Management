@@ -5,21 +5,33 @@ import { database } from '../services/firebase.service';
  * Validate if there's enough stock for an order
  * @param {Array} items - Order items with productId and quantity
  * @param {Array} products - Products list with stock
+ * @param {Array} sellingProducts - Optional selling products for mapping (for TMĐT orders)
  * @returns {Object} { valid: boolean, errors: Array }
  */
-export const validateStock = (items, products) => {
+export const validateStock = (items, products, sellingProducts = null) => {
   const errors = [];
   
   for (const item of items) {
-    const product = products.find(p => p.id === item.productId);
+    // If sellingProducts provided, map sellingProduct.id -> product.id
+    let actualProductId = item.productId;
+    
+    if (sellingProducts) {
+      const sellingProduct = sellingProducts.find(sp => sp.id === item.productId);
+      if (sellingProduct && sellingProduct.productId) {
+        actualProductId = sellingProduct.productId;
+      }
+    }
+    
+    const product = products.find(p => p.id === actualProductId);
     if (!product) {
       errors.push(
         `Sản phẩm "${item.productName}" không tồn tại trong kho! ` +
-        `ProductID: ${item.productId || 'undefined'}. ` +
+        `ProductID: ${actualProductId || 'undefined'}. ` +
         `Vui lòng vào /selling-products và đồng bộ lại sản phẩm này.`
       );
       console.error('❌ Product not found:', {
         itemProductId: item.productId,
+        actualProductId: actualProductId,
         itemProductName: item.productName,
         availableProductIds: products.map(p => p.id).slice(0, 5),
         totalProducts: products.length
@@ -31,8 +43,8 @@ export const validateStock = (items, products) => {
     if (item.quantity > availableStock) {
       errors.push(
         `Sản phẩm "${product.name}" không đủ hàng! ` +
-        `Tồn kho: ${availableStock} ${product.unit || 'lỗi'}, ` +
-        `Yêu cầu: ${item.quantity} ${product.unit || 'lỗi'}`
+        `Tồn kho: ${availableStock} ${product.unit || 'lỗi'}, ` +
+        `Yêu cầu: ${item.quantity} ${product.unit || 'lỗi'}`
       );
     }
   }
@@ -49,27 +61,38 @@ export const validateStock = (items, products) => {
  * @param {Array} products - Products list with stock
  * @param {String} orderId - Order ID for reference
  * @param {String} orderType - Order type (ecommerce, retail, wholesale)
+ * @param {Array} sellingProducts - Optional selling products for mapping (for TMĐT orders)
  * @returns {Promise} Firebase update promise
  */
-export const deductStock = async (items, products, orderId, orderType) => {
+export const deductStock = async (items, products, orderId, orderType, sellingProducts = null) => {
   const updates = {};
   const timestamp = Date.now();
   
   items.forEach((item, index) => {
-    const product = products.find(p => p.id === item.productId);
+    // If sellingProducts provided, map sellingProduct.id -> product.id
+    let actualProductId = item.productId;
+    
+    if (sellingProducts) {
+      const sellingProduct = sellingProducts.find(sp => sp.id === item.productId);
+      if (sellingProduct && sellingProduct.productId) {
+        actualProductId = sellingProduct.productId;
+      }
+    }
+    
+    const product = products.find(p => p.id === actualProductId);
     if (!product) return;
     
     const beforeStock = product.stock || 0;
     const afterStock = beforeStock - item.quantity;
     
     // Update product stock
-    updates[`products/${item.productId}/stock`] = afterStock;
-    updates[`products/${item.productId}/updatedAt`] = new Date().toISOString();
+    updates[`products/${actualProductId}/stock`] = afterStock;
+    updates[`products/${actualProductId}/updatedAt`] = new Date().toISOString();
     
     // Create transaction log
     const txnId = `txn_${timestamp}_${index}`;
     updates[`warehouseTransactions/${txnId}`] = {
-      productId: item.productId,
+      productId: actualProductId,
       productName: item.productName || product.name,
       sku: item.sku || product.sku,
       type: 'export',
@@ -87,13 +110,24 @@ export const deductStock = async (items, products, orderId, orderType) => {
 
 /**
  * Check stock availability for a single product
- * @param {String} productId - Product ID
+ * @param {String} productId - Product ID (or sellingProduct ID)
  * @param {Number} quantity - Required quantity
  * @param {Array} products - Products list
+ * @param {Array} sellingProducts - Optional selling products for mapping
  * @returns {Object} { available: boolean, stock: number, message: string }
  */
-export const checkStockAvailability = (productId, quantity, products) => {
-  const product = products.find(p => p.id === productId);
+export const checkStockAvailability = (productId, quantity, products, sellingProducts = null) => {
+  // If sellingProducts provided, map sellingProduct.id -> product.id
+  let actualProductId = productId;
+  
+  if (sellingProducts) {
+    const sellingProduct = sellingProducts.find(sp => sp.id === productId);
+    if (sellingProduct && sellingProduct.productId) {
+      actualProductId = sellingProduct.productId;
+    }
+  }
+  
+  const product = products.find(p => p.id === actualProductId);
   
   if (!product) {
     return {
@@ -110,7 +144,7 @@ export const checkStockAvailability = (productId, quantity, products) => {
     available,
     stock,
     message: available 
-      ? `Tồn kho: ${stock} ${product.unit || 'lỗi'}`
-      : `Không đủ hàng! Tồn kho chỉ còn: ${stock} ${product.unit || 'lỗi'}`
+      ? `Tồn kho: ${stock} ${product.unit || 'lỗi'}`
+      : `Không đủ hàng! Tồn kho chỉ còn: ${stock} ${product.unit || 'lỗi'}`
   };
 };

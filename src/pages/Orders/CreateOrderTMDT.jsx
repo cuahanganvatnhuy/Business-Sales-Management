@@ -307,7 +307,7 @@ const CreateOrderTMDT = () => {
     const item = form?.items.find(i => i.key === itemKey);
     
     if (item && item.productId) {
-      const stockCheck = checkStockAvailability(item.productId, quantity, products);
+      const stockCheck = checkStockAvailability(item.productId, quantity, products, sellingProducts);
       
       if (!stockCheck.available) {
         message.warning(stockCheck.message);
@@ -464,7 +464,7 @@ const CreateOrderTMDT = () => {
       return;
     }
     
-    const stockValidation = validateStock(allItems, products);
+    const stockValidation = validateStock(allItems, products, sellingProducts);
     
     console.log('📊 Validation result:', stockValidation);
     
@@ -566,7 +566,7 @@ const CreateOrderTMDT = () => {
       
       const allItems = orderForms.flatMap(form => form.items);
       const firstOrderId = orderForms[0]?.orderId || 'BATCH';
-      await deductStock(allItems, products, firstOrderId, 'ecommerce');
+      await deductStock(allItems, products, firstOrderId, 'ecommerce', sellingProducts);
       
       console.log('✅ Stock deducted successfully');
       
