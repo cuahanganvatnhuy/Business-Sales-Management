@@ -220,7 +220,7 @@ const MainLayout = () => {
       ]
     },
     {
-      key: '/shipping-costs',
+      key: '/shipping-cost',
       icon: <i className="fas fa-shipping-fast" />,
       label: 'Chi Phí Vận Chuyển',
     },

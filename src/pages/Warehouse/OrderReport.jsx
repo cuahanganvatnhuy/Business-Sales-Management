@@ -32,7 +32,7 @@ const OrderReport = () => {
   
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState(null);
-  
+
   // Pagination state
   const [pagination, setPagination] = useState({
     current: 1,

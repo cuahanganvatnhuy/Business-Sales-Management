@@ -14,6 +14,7 @@ import { CreateOrderTMDT, CreateOrderRetail, CreateOrderWholesale, ManageOrdersT
 import { ManageStores } from './pages/Stores';
 import Reports from './pages/Reports';
 import { Inventory, Transactions, UsageReport, OrderReport } from './pages/Warehouse';
+import ShippingCost from './pages/ShippingCost';
 import MainLayout from './components/Layout/MainLayout';
 import './App.css';
 
@@ -79,6 +80,9 @@ function App() {
                 <Route path="usage-report" element={<UsageReport />} />
                 <Route path="order-report" element={<OrderReport />} />
               </Route>
+              
+              {/* Shipping Cost Route */}
+              <Route path="shipping-cost" element={<ShippingCost />} />
               
               {/* Sẽ thêm routes khác sau */}
             </Route>
