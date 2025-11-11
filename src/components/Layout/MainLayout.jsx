@@ -259,7 +259,7 @@ const MainLayout = () => {
     menuItems.splice(menuItems.length - 1, 0, {
       key: '/users',
       icon: <TeamOutlined />,
-      label: 'Quản Lý Người Dùng',
+      label: 'Quản Lý Nhân sự',
     });
   }
 
