@@ -1,0 +1,100 @@
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { ConfigProvider } from 'antd';
+import viVN from 'antd/locale/vi_VN';
+import { AuthProvider } from './contexts/AuthContext';
+import { StoreProvider } from './contexts/StoreContext';
+import PrivateRoute from './components/PrivateRoute';
+import Login from './pages/Login';
+import Dashboard from './pages/Dashboard';
+import { AddProduct, ManageProducts } from './pages/Products';
+import Categories from './pages/Categories';
+import SellingProducts from './pages/SellingProducts';
+import { CreateOrderTMDT, CreateOrderRetail, CreateOrderWholesale, ManageOrdersTMDT, ManageOrdersRetail, ManageOrdersWholesale, DebtManagement, DebtDashboard } from './pages/Orders';
+import { ManageStores } from './pages/Stores';
+import Reports from './pages/Reports';
+import { Inventory, Transactions, UsageReport, OrderReport } from './pages/Warehouse';
+import ShippingCost from './pages/ShippingCost';
+import MainLayout from './components/Layout/MainLayout';
+import './App.css';
+
+function App() {
+  return (
+    <ConfigProvider locale={viVN}>
+      <AuthProvider>
+        <StoreProvider>
+          <Router>
+          <Routes>
+            {/* Public Route - Login */}
+            <Route path="/login" element={<Login />} />
+            
+            {/* Protected Routes - Cần đăng nhập */}
+            <Route path="/" element={
+              <PrivateRoute>
+                <MainLayout />
+              </PrivateRoute>
+            }>
+              <Route index element={<Navigate to="/dashboard" replace />} />
+              <Route path="dashboard" element={<Dashboard />} />
+              
+              {/* Products Routes */}
+              <Route path="products">
+                <Route index element={<Navigate to="manage" replace />} />
+                <Route path="add" element={<AddProduct />} />
+                <Route path="manage" element={<ManageProducts />} />
+              </Route>
+              
+              {/* Categories Route */}
+              <Route path="categories" element={<Categories />} />
+              
+              {/* Selling Products Route */}
+              <Route path="selling-products" element={<SellingProducts />} />
+              
+              {/* Orders Routes */}
+              <Route path="orders/create">
+                <Route path="ecommerce" element={<CreateOrderTMDT />} />
+                <Route path="retail" element={<CreateOrderRetail />} />
+                <Route path="wholesale" element={<CreateOrderWholesale />} />
+              </Route>
+              
+              <Route path="orders/manage">
+                <Route path="ecommerce" element={<ManageOrdersTMDT />} />
+                <Route path="retail" element={<ManageOrdersRetail />} />
+                <Route path="wholesale" element={<ManageOrdersWholesale />} />
+              </Route>
+              
+              <Route path="orders/debt" element={<DebtManagement />} />
+              <Route path="orders/debt/dashboard" element={<DebtDashboard />} />
+              
+              {/* Stores Route */}
+              <Route path="stores" element={<ManageStores />} />
+              
+              {/* Reports Route */}
+              <Route path="reports" element={<Reports />} />
+              
+              {/* Warehouse Routes */}
+              <Route path="warehouse">
+                <Route index element={<Navigate to="inventory" replace />} />
+                <Route path="inventory" element={<Inventory />} />
+                <Route path="transactions" element={<Transactions />} />
+                <Route path="usage-report" element={<UsageReport />} />
+                <Route path="order-report" element={<OrderReport />} />
+              </Route>
+              
+              {/* Shipping Cost Route */}
+              <Route path="shipping-cost" element={<ShippingCost />} />
+              
+              {/* Sẽ thêm routes khác sau */}
+            </Route>
+            
+            {/* Redirect mọi route không tồn tại về dashboard */}
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          </Routes>
+          </Router>
+        </StoreProvider>
+      </AuthProvider>
+    </ConfigProvider>
+  );
+}
+
+export default App;

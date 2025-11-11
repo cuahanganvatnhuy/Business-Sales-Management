@@ -1,0 +1,224 @@
+/* Orders Page Styling */
+.create-order-page {
+  padding: 24px;
+  background: #f0f2f5;
+  min-height: 100vh;
+}
+
+/* Order Type Selection Buttons */
+.order-type-buttons {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.order-type-buttons .ant-btn {
+  height: 38px;
+  border-radius: 6px;
+  font-size: 14px;
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+
+
+/* Method Selection Buttons */
+.method-buttons-container {
+  display: flex;
+  gap: 12px;
+  justify-content: end;
+  margin: 20px 0;
+}
+
+.method-button {
+  flex: 1;
+  max-width: 200px;
+  height: 35px;
+  border-radius: 6px;
+  font-weight: 500;
+  font-size: 13px;
+  transition: all 0.3s;
+  border: 1px solid #d9d9d9;
+  background: white;
+  color: #595959;
+}
+
+.method-button:hover {
+  border-color: #007A33;
+  color: #007A33;
+}
+
+.method-button.active {
+  background: linear-gradient(135deg, #007A33, #00632a);
+  border-color: #007A33;
+  color: white;
+  box-shadow: 0 2px 8px rgba(0, 122, 51, 0.3);
+}
+
+.method-button.active:hover {
+  background: linear-gradient(135deg, #00632a, #004d21);
+  color: white;
+}
+
+/* Compact spacing */
+.create-order-page .ant-card {
+  margin-bottom: 16px;
+}
+
+.create-order-page .ant-card:last-child {
+  margin-bottom: 0;
+}
+
+/* Card Styling */
+.ant-card {
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.ant-card-head {
+  border-bottom: none;
+  background: linear-gradient(135deg, #007A33, #00632a);
+  padding: 12px 20px;
+  border-radius: 8px 8px 0 0;
+}
+
+.ant-card-head-title {
+  font-size: 16px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ant-card-body {
+  padding: 20px;
+}
+
+/* Form Styling */
+.ant-form-item {
+  margin-bottom: 16px;
+}
+
+.ant-form-item-label > label {
+  font-weight: 600;
+  color: #333;
+  font-size: 13px;
+}
+
+.ant-input,
+.ant-select-selector,
+.ant-picker {
+  border-radius: 6px !important;
+}
+
+.ant-divider {
+  margin: 16px 0 !important;
+}
+
+/* Statistics Cards */
+.ant-statistic-title {
+  font-weight: 600;
+  color: #666;
+}
+
+.ant-statistic-content {
+  font-size: 28px;
+  font-weight: 700;
+}
+
+/* Table Styling */
+.ant-table {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.ant-table-thead > tr > th {
+  background: #007A33 !important;
+  color: white !important;
+  font-weight: 600;
+  border-bottom: none !important;
+}
+
+.ant-table-tbody > tr:hover > td {
+  background: #f0f9ff !important;
+}
+
+/* Empty State */
+.ant-empty {
+  padding: 48px 0;
+}
+
+.ant-empty-description {
+  color: #999;
+  font-size: 16px;
+}
+
+/* Buttons */
+.ant-btn-primary {
+  transition: all 0.3s;
+}
+
+.ant-btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 122, 51, 0.3);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .create-order-page {
+    padding: 16px;
+  }
+
+  .page-header-card h2 {
+    font-size: 20px;
+  }
+
+  .ant-col {
+    margin-bottom: 16px;
+  }
+}
+
+/* Loading Overlay */
+.ant-spin-nested-loading {
+  min-height: 400px;
+}
+
+/* Tags */
+.ant-tag {
+  border-radius: 6px;
+  padding: 4px 12px;
+  font-weight: 500;
+}
+
+/* Divider */
+.ant-divider {
+  margin: 16px 0;
+}
+
+/* Upload Areas */
+.ant-upload-drag {
+  border-radius: 8px !important;
+  border: 2px dashed #d9d9d9 !important;
+  background: #fafafa !important;
+}
+
+.ant-upload-drag:hover {
+  border-color: #007A33 !important;
+}
+
+.ant-upload-drag .ant-upload-drag-icon {
+  margin-bottom: 12px !important;
+}
+
+.ant-upload-drag .ant-upload-text {
+  font-size: 14px !important;
+  color: #333 !important;
+  font-weight: 500 !important;
+}
+
+.ant-upload-drag .ant-upload-hint {
+  font-size: 13px !important;
+  color: #999 !important;
+}

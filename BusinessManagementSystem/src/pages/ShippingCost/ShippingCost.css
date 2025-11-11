@@ -1,0 +1,92 @@
+/* Shipping Cost Page Styles */
+
+.shipping-cost-page {
+  padding: 24px;
+}
+
+.shipping-cost-page .ant-statistic-title {
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 8px;
+}
+
+.shipping-cost-page .ant-statistic-content {
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.shipping-cost-page .ant-card {
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.shipping-cost-page .ant-table-thead > tr > th {
+  background: #f0f9ff;
+  color: #007A33;
+  font-weight: 600;
+}
+
+.shipping-cost-page .ant-btn-primary {
+  background: #007A33;
+  border-color: #007A33;
+}
+
+.shipping-cost-page .ant-btn-primary:hover {
+  background: #005a24;
+  border-color: #005a24;
+}
+
+/* Fix Select search input text color and size - Apply to all selects in this page */
+.shipping-cost-page .ant-select-selection-search-input {
+  color: #333 !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+}
+
+.shipping-cost-page .ant-select-selector {
+  font-size: 13px !important;
+  min-height: 38px !important;
+}
+
+.shipping-cost-page .ant-select-selection-item {
+  color: #333 !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+}
+
+.shipping-cost-page .ant-select-selection-placeholder {
+  color: #999 !important;
+  font-size: 13px !important;
+}
+
+/* Multi-select tags - larger and more visible */
+.shipping-cost-page .ant-select-multiple .ant-select-selection-item {
+  background: #e6f7ff;
+  border: 1px solid #91d5ff;
+  color: #0050b3;
+  font-size: 13px;
+  padding: 4px 10px;
+  font-weight: 500;
+}
+
+/* Dropdown options - Global because dropdown renders outside component */
+.ant-select-dropdown .ant-select-item {
+  font-size: 13px !important;
+  padding: 10px 14px !important;
+  color: #333 !important;
+}
+
+.ant-select-dropdown .ant-select-item-option-content {
+  font-size: 13px !important;
+  color: #333 !important;
+  font-weight: 500 !important;
+}
+
+.ant-select-dropdown .ant-select-item-option-selected {
+  background-color: #e6f7ff !important;
+  font-weight: 600 !important;
+}
+
+.ant-select-dropdown .ant-select-item-option-active {
+  background-color: #f5f5f5 !important;
+}
