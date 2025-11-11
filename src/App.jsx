@@ -15,6 +15,7 @@ import { ManageStores } from './pages/Stores';
 import Reports from './pages/Reports';
 import { Inventory, Transactions, UsageReport, OrderReport } from './pages/Warehouse';
 import ShippingCost from './pages/ShippingCost';
+import { GlobalInvoice, StoreInvoice, PaymentInvoice } from './pages/Invoices';
 import MainLayout from './components/Layout/MainLayout';
 import './App.css';
 
@@ -83,6 +84,14 @@ function App() {
               
               {/* Shipping Cost Route */}
               <Route path="shipping-cost" element={<ShippingCost />} />
+              
+              {/* Invoices Routes */}
+              <Route path="invoices">
+                <Route index element={<Navigate to="global" replace />} />
+                <Route path="global" element={<GlobalInvoice />} />
+                <Route path="store" element={<StoreInvoice />} />
+                <Route path="payment" element={<PaymentInvoice />} />
+              </Route>
               
               {/* Sẽ thêm routes khác sau */}
             </Route>
