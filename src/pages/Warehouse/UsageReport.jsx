@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { database } from '../../services/firebase.service';
 import { ref, onValue } from 'firebase/database';
+import { useStore } from '../../contexts/StoreContext';
 import {
-  Card, Table, DatePicker, Select, Button, Space, Row, Col, Statistic
+  Card, Table, DatePicker, Select, Button, Space, Row, Col, Statistic, Input
 } from 'antd';
 import {
-  LineChartOutlined, RiseOutlined, FallOutlined, FileExcelOutlined
+  LineChartOutlined, RiseOutlined, FallOutlined, FileExcelOutlined,
+  SwapOutlined, DollarOutlined, ReloadOutlined, SearchOutlined
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import * as XLSX from 'xlsx';
@@ -14,6 +16,7 @@ const { RangePicker } = DatePicker;
 const { Option } = Select;
 
 const UsageReport = () => {
+  const { selectedStore } = useStore();
   const [loading, setLoading] = useState(false);
   const [transactions, setTransactions] = useState([]);
   const [products, setProducts] = useState([]);
@@ -21,10 +24,23 @@ const UsageReport = () => {
   const [dateRange, setDateRange] = useState([dayjs().startOf('month'), dayjs()]);
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [categories, setCategories] = useState([]);
+  const [storeFilter, setStoreFilter] = useState(selectedStore?.id || 'all');
+  const [stores, setStores] = useState([]);
+  const [searchText, setSearchText] = useState('');
+  const [periodFilter, setPeriodFilter] = useState('month'); // today, week, month, custom
   
+  const [totalTransactions, setTotalTransactions] = useState(0);
   const [totalImport, setTotalImport] = useState(0);
   const [totalExport, setTotalExport] = useState(0);
   const [totalValue, setTotalValue] = useState(0);
+  
+  // Pagination state
+  const [pagination, setPagination] = useState({
+    current: 1,
+    pageSize: 20,
+    showSizeChanger: true,
+    pageSizeOptions: ['10', '20', '50', '100']
+  });
 
   // Load data
   useEffect(() => {
@@ -33,6 +49,7 @@ const UsageReport = () => {
     const transactionsRef = ref(database, 'warehouseTransactions');
     const productsRef = ref(database, 'products');
     const categoriesRef = ref(database, 'categories');
+    const storesRef = ref(database, 'stores');
     
     onValue(transactionsRef, (snapshot) => {
       setTransactions(snapshot.val() ? Object.values(snapshot.val()) : []);
@@ -44,9 +61,32 @@ const UsageReport = () => {
     
     onValue(categoriesRef, (snapshot) => {
       setCategories(snapshot.val() ? Object.keys(snapshot.val()).map(k => ({ id: k, ...snapshot.val()[k] })) : []);
+    });
+
+    onValue(storesRef, (snapshot) => {
+      setStores(snapshot.val() ? Object.keys(snapshot.val()).map(k => ({ id: k, ...snapshot.val()[k] })) : []);
       setLoading(false);
     });
   }, []);
+
+  // Update store filter when selected store changes
+  useEffect(() => {
+    if (selectedStore && selectedStore.id !== 'all') {
+      setStoreFilter(selectedStore.id);
+    }
+  }, [selectedStore]);
+
+  // Handle period filter change
+  useEffect(() => {
+    if (periodFilter === 'today') {
+      setDateRange([dayjs().startOf('day'), dayjs().endOf('day')]);
+    } else if (periodFilter === 'week') {
+      setDateRange([dayjs().startOf('week'), dayjs().endOf('week')]);
+    } else if (periodFilter === 'month') {
+      setDateRange([dayjs().startOf('month'), dayjs().endOf('month')]);
+    }
+    // 'custom' keeps current dateRange
+  }, [periodFilter]);
 
   // Generate report
   useEffect(() => {
@@ -57,53 +97,82 @@ const UsageReport = () => {
       const txDate = dayjs(t.createdAt);
       return txDate.isAfter(dateRange[0].subtract(1, 'day')) && txDate.isBefore(dateRange[1].add(1, 'day'));
     });
+
+    // Filter by store
+    if (storeFilter !== 'all') {
+      filtered = filtered.filter(t => t.storeId === storeFilter);
+    }
     
     const productStats = {};
     
     filtered.forEach(tx => {
-      if (!productStats[tx.productId]) {
+      const key = `${tx.productId}_${tx.storeId || 'nostore'}`;
+      if (!productStats[key]) {
         const product = products.find(p => p.id === tx.productId);
-        productStats[tx.productId] = {
+        const store = stores.find(s => s.id === tx.storeId);
+        productStats[key] = {
           productId: tx.productId,
           productName: tx.productName,
           sku: tx.sku,
           categoryId: product?.categoryId,
+          categoryName: product?.category || 'N/A',
+          storeId: tx.storeId,
+          storeName: store?.name || tx.storeName || 'N/A',
           totalImport: 0,
           totalExport: 0,
-          currentStock: product?.inventory || 0,
+          beginStock: 0, // Will calculate
+          endStock: product?.stock || 0,
+          currentStock: product?.stock || 0,
           price: product?.price || 0
         };
       }
       
       if (tx.type === 'import') {
-        productStats[tx.productId].totalImport += tx.quantity;
+        productStats[key].totalImport += tx.quantity;
       } else {
-        productStats[tx.productId].totalExport += tx.quantity;
+        productStats[key].totalExport += tx.quantity;
       }
     });
     
-    let report = Object.values(productStats);
+    let report = Object.values(productStats).map(r => {
+      // Calculate begin stock = current - import + export
+      const beginStock = r.currentStock - r.totalImport + r.totalExport;
+      return {
+        ...r,
+        beginStock: Math.max(0, beginStock),
+        endStock: r.currentStock,
+        totalValue: r.price * r.totalExport,
+        usageRate: r.beginStock + r.totalImport > 0 
+          ? ((r.totalExport / (r.beginStock + r.totalImport)) * 100).toFixed(1) 
+          : 0
+      };
+    });
     
+    // Filter by category
     if (categoryFilter !== 'all') {
       report = report.filter(r => r.categoryId === categoryFilter);
     }
     
-    report = report.map(r => ({
-      ...r,
-      totalValue: r.price * r.currentStock,
-      usageRate: r.totalImport > 0 ? ((r.totalExport / r.totalImport) * 100).toFixed(1) : 0
-    })).sort((a, b) => b.totalExport - a.totalExport);
+    // Filter by search text
+    if (searchText) {
+      report = report.filter(r => 
+        r.productName?.toLowerCase().includes(searchText.toLowerCase()) ||
+        r.sku?.toLowerCase().includes(searchText.toLowerCase())
+      );
+    }
     
+    report.sort((a, b) => b.totalExport - a.totalExport);
     setReportData(report);
     
     const sumImport = report.reduce((sum, r) => sum + r.totalImport, 0);
     const sumExport = report.reduce((sum, r) => sum + r.totalExport, 0);
     const sumValue = report.reduce((sum, r) => sum + r.totalValue, 0);
     
+    setTotalTransactions(filtered.length);
     setTotalImport(sumImport);
     setTotalExport(sumExport);
     setTotalValue(sumValue);
-  }, [transactions, products, dateRange, categoryFilter]);
+  }, [transactions, products, stores, dateRange, categoryFilter, storeFilter, searchText]);
 
   // Export Excel
   const exportExcel = () => {
@@ -111,11 +180,15 @@ const UsageReport = () => {
       'STT': i + 1,
       'Sản Phẩm': r.productName,
       'SKU': r.sku,
-      'Tổng Nhập': r.totalImport,
-      'Tổng Xuất': r.totalExport,
-      'Tồn Kho': r.currentStock,
-      'Tỷ Lệ SD': `${r.usageRate}%`,
-      'Giá Trị': r.totalValue
+      'Danh Mục': r.categoryName,
+      'Cửa Hàng': r.storeName,
+      'Tồn Đầu Kỳ': r.beginStock,
+      'Nhập Kho': r.totalImport,
+      'Xuất Kho': r.totalExport,
+      'Tồn Cuối Kỳ': r.endStock,
+      'Tồn Hiện Tại': r.currentStock,
+      '% Sử Dụng': `${r.usageRate}%`,
+      'Giá Trị Xuất': r.totalValue
     }));
     
     const ws = XLSX.utils.json_to_sheet(data);
@@ -145,7 +218,27 @@ const UsageReport = () => {
       width: 120
     },
     {
-      title: 'Tổng Nhập',
+      title: 'Danh Mục',
+      dataIndex: 'categoryName',
+      key: 'categoryName',
+      width: 120
+    },
+    {
+      title: 'Cửa Hàng',
+      dataIndex: 'storeName',
+      key: 'storeName',
+      width: 120
+    },
+    {
+      title: 'Tồn Đầu Kỳ',
+      dataIndex: 'beginStock',
+      key: 'beginStock',
+      width: 100,
+      align: 'center',
+      sorter: (a, b) => a.beginStock - b.beginStock
+    },
+    {
+      title: 'Nhập Kho',
       dataIndex: 'totalImport',
       key: 'totalImport',
       width: 100,
@@ -154,7 +247,7 @@ const UsageReport = () => {
       render: (qty) => <span style={{ color: '#52c41a', fontWeight: 'bold' }}>{qty}</span>
     },
     {
-      title: 'Tổng Xuất',
+      title: 'Xuất Kho',
       dataIndex: 'totalExport',
       key: 'totalExport',
       width: 100,
@@ -163,7 +256,16 @@ const UsageReport = () => {
       render: (qty) => <span style={{ color: '#f5222d', fontWeight: 'bold' }}>{qty}</span>
     },
     {
-      title: 'Tồn Kho',
+      title: 'Tồn Cuối Kỳ',
+      dataIndex: 'endStock',
+      key: 'endStock',
+      width: 100,
+      align: 'center',
+      sorter: (a, b) => a.endStock - b.endStock,
+      render: (qty) => <span style={{ color: '#1890ff', fontWeight: 'bold' }}>{qty}</span>
+    },
+    {
+      title: 'Tồn Hiện Tại',
       dataIndex: 'currentStock',
       key: 'currentStock',
       width: 100,
@@ -171,16 +273,16 @@ const UsageReport = () => {
       sorter: (a, b) => a.currentStock - b.currentStock
     },
     {
-      title: 'Tỷ Lệ SD (%)',
+      title: '% Sử Dụng',
       dataIndex: 'usageRate',
       key: 'usageRate',
-      width: 120,
+      width: 100,
       align: 'center',
       sorter: (a, b) => a.usageRate - b.usageRate,
-      render: (rate) => `${rate}%`
+      render: (rate) => <span style={{ color: rate > 80 ? '#52c41a' : rate > 50 ? '#faad14' : '#999' }}>{rate}%</span>
     },
     {
-      title: 'Giá Trị',
+      title: 'Giá Trị Xuất',
       dataIndex: 'totalValue',
       key: 'totalValue',
       width: 150,
@@ -203,88 +305,127 @@ const UsageReport = () => {
         </div>
       </Card>
 
+      {/* Filters */}
+      <Card style={{ marginBottom: 16 }}>
+        <Row gutter={[8, 8]} align="middle">
+          <Col><span style={{ color: '#666', fontWeight: 500, fontSize: 13 }}>📅</span></Col>
+          <Col style={{ width: 110 }}>
+            <Select value={periodFilter} onChange={(val) => { setPeriodFilter(val); if (val !== 'custom') setDateRange(null); }} style={{ width: '100%' }} size="small">
+              <Option value="today">Hôm nay</Option>
+              <Option value="week">Tuần này</Option>
+              <Option value="month">Tháng này</Option>
+              <Option value="custom">Tùy chỉnh</Option>
+            </Select>
+          </Col>
+          <Col style={{ width: 280 }}>
+            <RangePicker
+              value={dateRange}
+              onChange={(dates) => { setDateRange(dates); setPeriodFilter('custom'); }}
+              style={{ width: '100%' }}
+              size="small"
+              format="DD/MM/YYYY"
+              placeholder={['dd/mm/yyyy', 'dd/mm/yyyy']}
+              disabled={periodFilter !== 'custom'}
+            />
+          </Col>
+          <Col><span style={{ color: '#666', fontWeight: 500, fontSize: 13 }}>📦</span></Col>
+          <Col style={{ width: 140 }}>
+            <Select value={categoryFilter} onChange={setCategoryFilter} style={{ width: '100%' }} size="small" allowClear placeholder="Danh mục">
+              <Option value="all">Tất cả danh mục</Option>
+              {categories.map(cat => (<Option key={cat.id} value={cat.id}>{cat.name}</Option>))}
+            </Select>
+          </Col>
+          <Col><span style={{ color: '#666', fontWeight: 500, fontSize: 13 }}>🏪</span></Col>
+          <Col style={{ width: 140 }}>
+            <Select value={storeFilter} onChange={setStoreFilter} style={{ width: '100%' }} size="small" allowClear placeholder="Cửa hàng">
+              <Option value="all">Tất cả cửa hàng</Option>
+              {stores.map(store => (<Option key={store.id} value={store.id}>{store.name}</Option>))}
+            </Select>
+          </Col>
+          <Col flex="auto">
+            <Input
+              placeholder="🔍 Tìm kiếm..."
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              allowClear
+              size="small"
+              style={{ width: '100%' }}
+            />
+          </Col>
+          <Col>
+            <Button size="small" icon={<ReloadOutlined />} onClick={() => { setPeriodFilter('month'); setCategoryFilter('all'); setStoreFilter('all'); setSearchText(''); }}>Làm mới</Button>
+          </Col>
+          <Col>
+            <Button size="small" type="primary" icon={<FileExcelOutlined />} onClick={exportExcel} style={{ background: '#52c41a', borderColor: '#52c41a' }}>Xuất Excel</Button>
+          </Col>
+        </Row>
+      </Card>
+
       {/* Stats */}
       <Row gutter={16} style={{ marginBottom: 24 }}>
-        <Col xs={24} sm={8}>
-          <Card>
+        <Col xs={12} sm={6}>
+          <Card style={{ borderLeft: '4px solid #6c5ce7' }}>
             <Statistic
-              title="Tổng Nhập Kho"
+              title={<span style={{ fontSize: 12, color: '#999' }}>TỔNG GIAO DỊCH</span>}
+              value={totalTransactions}
+              prefix={<SwapOutlined style={{ color: '#6c5ce7', fontSize: 20 }} />}
+              valueStyle={{ color: '#6c5ce7', fontSize: 24, fontWeight: 'bold' }}
+            />
+          </Card>
+        </Col>
+        <Col xs={12} sm={6}>
+          <Card style={{ borderLeft: '4px solid #00cfe8' }}>
+            <Statistic
+              title={<span style={{ fontSize: 12, color: '#999' }}>TỔNG NHẬP KHO</span>}
               value={totalImport}
-              prefix={<RiseOutlined style={{ color: '#52c41a' }} />}
-              valueStyle={{ color: '#52c41a' }}
-              suffix="SP"
+              prefix={<RiseOutlined style={{ color: '#00cfe8', fontSize: 20 }} />}
+              valueStyle={{ color: '#00cfe8', fontSize: 24, fontWeight: 'bold' }}
             />
           </Card>
         </Col>
-        <Col xs={24} sm={8}>
-          <Card>
+        <Col xs={12} sm={6}>
+          <Card style={{ borderLeft: '4px solid #ff9f43' }}>
             <Statistic
-              title="Tổng Xuất Kho"
+              title={<span style={{ fontSize: 12, color: '#999' }}>TỔNG XUẤT KHO</span>}
               value={totalExport}
-              prefix={<FallOutlined style={{ color: '#f5222d' }} />}
-              valueStyle={{ color: '#f5222d' }}
-              suffix="SP"
+              prefix={<FallOutlined style={{ color: '#ff9f43', fontSize: 20 }} />}
+              valueStyle={{ color: '#ff9f43', fontSize: 24, fontWeight: 'bold' }}
             />
           </Card>
         </Col>
-        <Col xs={24} sm={8}>
-          <Card>
+        <Col xs={12} sm={6}>
+          <Card style={{ borderLeft: '4px solid #b8b8b8' }}>
             <Statistic
-              title="Giá Trị Tồn"
+              title={<span style={{ fontSize: 12, color: '#999' }}>GIÁ TRỊ SỬ DỤNG</span>}
               value={totalValue}
-              valueStyle={{ color: '#1890ff' }}
+              prefix={<DollarOutlined style={{ color: '#b8b8b8', fontSize: 20 }} />}
+              valueStyle={{ color: '#2d3436', fontSize: 22, fontWeight: 'bold' }}
               formatter={(value) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value)}
             />
           </Card>
         </Col>
       </Row>
 
-      {/* Filters & Report */}
-      <Card title="Báo Cáo Chi Tiết" style={{ marginBottom: 24, borderRadius: 12 }}>
-        <Space direction="vertical" style={{ width: '100%' }} size="large">
-          <Row gutter={16}>
-            <Col xs={24} md={10}>
-              <RangePicker
-                value={dateRange}
-                onChange={setDateRange}
-                style={{ width: '100%' }}
-                format="DD/MM/YYYY"
-              />
-            </Col>
-            <Col xs={24} md={8}>
-              <Select
-                placeholder="Danh mục"
-                value={categoryFilter}
-                onChange={setCategoryFilter}
-                style={{ width: '100%' }}
-              >
-                <Option value="all">Tất cả danh mục</Option>
-                {categories.map(cat => (
-                  <Option key={cat.id} value={cat.id}>{cat.name}</Option>
-                ))}
-              </Select>
-            </Col>
-            <Col xs={24} md={6}>
-              <Button
-                type="primary"
-                icon={<FileExcelOutlined />}
-                onClick={exportExcel}
-                style={{ width: '100%', background: '#52c41a', borderColor: '#52c41a' }}
-              >
-                Xuất Excel
-              </Button>
-            </Col>
-          </Row>
-
-          <Table
-            columns={columns}
-            dataSource={reportData}
-            rowKey="productId"
-            loading={loading}
-            pagination={{ pageSize: 20, showSizeChanger: true }}
-            scroll={{ x: 1200 }}
-          />
-        </Space>
+      {/* Report Table */}
+      <Card title="Báo Cáo Sử Dụng Theo Sản Phẩm" style={{ marginBottom: 24, borderRadius: 12 }}>
+        <Table
+          columns={columns}
+          dataSource={reportData}
+          rowKey={(record) => `${record.productId}_${record.storeId || 'nostore'}`}
+          loading={loading}
+          pagination={{
+            ...pagination,
+            total: reportData.length,
+            showTotal: (total) => `Tổng ${total} sản phẩm`,
+            onChange: (page, pageSize) => {
+              setPagination({ ...pagination, current: page, pageSize });
+            },
+            onShowSizeChange: (current, size) => {
+              setPagination({ ...pagination, current: 1, pageSize: size });
+            }
+          }}
+          scroll={{ x: 1200 }}
+        />
       </Card>
     </div>
   );

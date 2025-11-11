@@ -12,6 +12,7 @@ import {
   MoreOutlined, PrinterOutlined, EllipsisOutlined
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
+import { useStore } from '../../contexts/StoreContext';
 import * as XLSX from 'xlsx';
 import dayjs from 'dayjs';
 
@@ -20,6 +21,7 @@ const { Search } = Input;
 
 const Inventory = () => {
   const navigate = useNavigate();
+  const { selectedStore } = useStore();
   const [loading, setLoading] = useState(false);
   const [products, setProducts] = useState([]);
   const [filteredProducts, setFilteredProducts] = useState([]);
@@ -44,6 +46,16 @@ const Inventory = () => {
   const [adjustReason, setAdjustReason] = useState('');
   const [adjustType, setAdjustType] = useState('add'); // 'add' or 'subtract'
   const [updateQuantity, setUpdateQuantity] = useState(0);
+  const [printModalVisible, setPrintModalVisible] = useState(false);
+  
+  // Pagination state
+  const [pagination, setPagination] = useState({
+    current: 1,
+    pageSize: 10,
+    showSizeChanger: true,
+    pageSizeOptions: ['10', '20', '50', '100']
+  });
+  const [exportTransaction, setExportTransaction] = useState(null);
 
   // Load products
   useEffect(() => {
@@ -111,10 +123,10 @@ const Inventory = () => {
   const lowStock = products.filter(p => p.stock > 0 && p.stock < 10).length;
   const outOfStock = products.filter(p => p.stock === 0).length;
 
-  // Handle adjust inventory (single or bulk)
+  // Handle adjust inventory (single or bulk) - SET stock to new value
   const handleAdjust = async () => {
-    if (adjustQuantity === 0) {
-      message.error('Vui lòng nhập số lượng điều chỉnh!');
+    if (adjustQuantity < 0) {
+      message.error('Số lượng kho không thể âm!');
       return;
     }
     
@@ -129,18 +141,11 @@ const Inventory = () => {
         return;
       }
       
-      // Check all products can be adjusted
-      for (const product of productsToAdjust) {
-        const newStock = (product.stock || 0) + adjustQuantity;
-        if (newStock < 0) {
-          message.error(`Sản phẩm "${product.name}" không đủ tồn kho để điều chỉnh!`);
-          return;
-        }
-      }
-      
-      // Apply adjustments
+      // Apply adjustments - SET stock to adjustQuantity
       productsToAdjust.forEach((product, index) => {
-        const newStock = (product.stock || 0) + adjustQuantity;
+        const beforeStock = product.stock || 0;
+        const newStock = adjustQuantity; // SET to new value, not add
+        
         updates[`products/${product.id}/stock`] = newStock;
         updates[`products/${product.id}/updatedAt`] = new Date().toISOString();
         
@@ -150,11 +155,15 @@ const Inventory = () => {
           productId: product.id,
           productName: product.name,
           sku: product.sku,
-          type: adjustQuantity > 0 ? 'import' : 'export',
-          quantity: Math.abs(adjustQuantity),
-          beforeQuantity: product.stock || 0,
+          unit: product.unit || 'Cái',
+          price: product.price || 0,
+          type: 'adjustment',
+          quantity: newStock,
+          beforeQuantity: beforeStock,
           afterQuantity: newStock,
           reason: adjustReason || 'Điều chỉnh tồn kho',
+          storeId: selectedStore?.id || null,
+          storeName: selectedStore?.name || 'N/A',
           createdAt: new Date().toISOString()
         };
       });
@@ -195,8 +204,66 @@ const Inventory = () => {
 
   // Handle import stock (add/subtract)
   const handleImportStock = async () => {
-    if (!selectedProduct || adjustQuantity <= 0) {
-      message.error('Vui lòng chọn sản phẩm và nhập số lượng hợp lệ!');
+    if (adjustQuantity <= 0) {
+      message.error('Vui lòng nhập số lượng hợp lệ!');
+      return;
+    }
+
+    // Bulk operation
+    if (!selectedProduct && selectedRowKeys.length > 0) {
+      try {
+        const selectedProducts = products.filter(p => selectedRowKeys.includes(p.id));
+        
+        for (const product of selectedProducts) {
+          const beforeStock = product.stock || 0;
+          const changeAmount = adjustType === 'add' ? adjustQuantity : -adjustQuantity;
+          const afterStock = beforeStock + changeAmount;
+
+          if (afterStock < 0) {
+            message.warning(`Bỏ qua ${product.name}: Số lượng kho sẽ âm!`);
+            continue;
+          }
+
+          // Update product stock
+          await update(ref(database, `products/${product.id}`), {
+            stock: afterStock,
+            updatedAt: new Date().toISOString()
+          });
+
+          // Log transaction
+          const txnRef = push(ref(database, 'warehouseTransactions'));
+          await update(txnRef, {
+            productId: product.id,
+            productName: product.name,
+            sku: product.sku,
+            unit: product.unit || 'lỗi',
+            price: product.price || 0,
+            type: adjustType === 'add' ? 'import' : 'export',
+            quantity: adjustQuantity,
+            beforeQuantity: beforeStock,
+            afterQuantity: afterStock,
+            reason: adjustReason || (adjustType === 'add' ? 'Nhập kho hàng loạt' : 'Xuất kho hàng loạt'),
+            storeId: selectedStore?.id || null,
+            storeName: selectedStore?.name || 'N/A',
+            createdAt: new Date().toISOString()
+          });
+        }
+
+        message.success(`Đã ${adjustType === 'add' ? 'nhập' : 'xuất'} ${selectedProducts.length} sản phẩm!`);
+        setImportModalVisible(false);
+        setSelectedRowKeys([]);
+        setAdjustQuantity(0);
+        setAdjustReason('');
+        return;
+      } catch (error) {
+        message.error('Lỗi: ' + error.message);
+        return;
+      }
+    }
+
+    // Single product operation
+    if (!selectedProduct) {
+      message.error('Vui lòng chọn sản phẩm!');
       return;
     }
 
@@ -222,16 +289,37 @@ const Inventory = () => {
         productId: selectedProduct.id,
         productName: selectedProduct.name,
         sku: selectedProduct.sku,
+        unit: selectedProduct.unit || 'Cái',
+        price: selectedProduct.price || 0,
         type: adjustType === 'add' ? 'import' : 'export',
         quantity: adjustQuantity,
         beforeQuantity: beforeStock,
         afterQuantity: afterStock,
         reason: adjustReason || (adjustType === 'add' ? 'Nhập kho thêm' : 'Xuất kho'),
+        storeId: selectedStore?.id || null,
+        storeName: selectedStore?.name || 'N/A',
         createdAt: new Date().toISOString()
       });
 
       message.success(`Đã ${adjustType === 'add' ? 'nhập' : 'xuất'} kho thành công!`);
       setImportModalVisible(false);
+      
+      // If export, ask to print receipt
+      if (adjustType === 'subtract') {
+        setExportTransaction({
+          productName: selectedProduct.name,
+          sku: selectedProduct.sku,
+          unit: selectedProduct.unit || 'Cái',
+          quantity: adjustQuantity,
+          beforeQuantity: beforeStock,
+          afterQuantity: afterStock,
+          reason: adjustReason || 'Xuất kho',
+          storeName: selectedStore?.name || 'N/A',
+          createdAt: new Date().toISOString()
+        });
+        setPrintModalVisible(true);
+      }
+      
       setSelectedProduct(null);
       setAdjustQuantity(0);
       setAdjustReason('');
@@ -263,11 +351,15 @@ const Inventory = () => {
         productId: selectedProduct.id,
         productName: selectedProduct.name,
         sku: selectedProduct.sku,
-        type: updateQuantity > beforeStock ? 'import' : 'export',
-        quantity: Math.abs(updateQuantity - beforeStock),
+        unit: selectedProduct.unit || 'Cái',
+        price: selectedProduct.price || 0,
+        type: 'adjustment',
+        quantity: updateQuantity,
         beforeQuantity: beforeStock,
         afterQuantity: updateQuantity,
         reason: adjustReason || 'Điều chỉnh kho',
+        storeId: selectedStore?.id || null,
+        storeName: selectedStore?.name || 'N/A',
         createdAt: new Date().toISOString()
       });
 
@@ -279,6 +371,272 @@ const Inventory = () => {
     } catch (error) {
       message.error('Lỗi: ' + error.message);
     }
+  };
+
+  // Print export receipt
+  const printExportReceipt = () => {
+    if (!exportTransaction) return;
+    
+    const printWindow = window.open('', '_blank');
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Phiếu Xuất Kho</title>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { 
+            font-family: 'Times New Roman', Times, serif; 
+            padding: 20px;
+            background: #fff;
+            font-size: 13px;
+          }
+          .receipt {
+            max-width: 210mm;
+            margin: 0 auto;
+            padding: 15mm;
+          }
+          .company-header {
+            text-align: center;
+            margin-bottom: 5px;
+          }
+          .company-name {
+            font-size: 13px;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-bottom: 3px;
+          }
+          .company-info {
+            font-size: 11px;
+            color: #333;
+          }
+          .title {
+            text-align: center;
+            margin: 20px 0 10px 0;
+          }
+          .title h1 {
+            font-size: 20px;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+            letter-spacing: 1px;
+          }
+          .title .date {
+            font-size: 12px;
+            font-style: italic;
+          }
+          .title .serial {
+            font-size: 12px;
+            margin-top: 5px;
+          }
+          .divider {
+            border-top: 2px solid #000;
+            margin: 15px 0;
+          }
+          .info-table {
+            width: 100%;
+            margin-bottom: 15px;
+          }
+          .info-table td {
+            padding: 5px;
+            font-size: 12px;
+          }
+          .info-label {
+            font-weight: bold;
+            width: 120px;
+          }
+          .product-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+          }
+          .product-table th {
+            background-color: #f0f0f0;
+            border: 1px solid #000;
+            padding: 8px 5px;
+            font-size: 12px;
+            font-weight: bold;
+            text-align: center;
+          }
+          .product-table td {
+            border: 1px solid #000;
+            padding: 8px 5px;
+            font-size: 12px;
+          }
+          .product-table .center {
+            text-align: center;
+          }
+          .product-table .right {
+            text-align: right;
+          }
+          .product-table .left {
+            text-align: left;
+          }
+          .stock-row {
+            background-color: #f9f9f9;
+          }
+          .stock-row td {
+            font-weight: bold;
+            padding: 10px 5px;
+          }
+          .stock-change {
+            color: #d32f2f;
+            font-size: 13px;
+          }
+          .stock-after {
+            color: #388e3c;
+            font-size: 13px;
+          }
+          .note-section {
+            margin: 15px 0;
+            padding: 10px;
+            background: #f9f9f9;
+            border-left: 3px solid #007A33;
+          }
+          .note-section .note-label {
+            font-weight: bold;
+            margin-bottom: 5px;
+          }
+          .signatures {
+            margin-top: 40px;
+            display: flex;
+            justify-content: space-between;
+          }
+          .signature-box {
+            text-align: center;
+            width: 30%;
+          }
+          .signature-label {
+            font-weight: bold;
+            margin-bottom: 60px;
+            font-size: 12px;
+          }
+          .signature-line {
+            border-top: 1px dotted #333;
+            padding-top: 5px;
+            font-size: 11px;
+            font-style: italic;
+          }
+          .footer-note {
+            margin-top: 20px;
+            font-size: 11px;
+            font-style: italic;
+            color: #666;
+          }
+          .print-time {
+            text-align: right;
+            font-size: 10px;
+            color: #999;
+            margin-top: 10px;
+          }
+          @media print {
+            body { padding: 0; }
+            .receipt { padding: 10mm; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="receipt">
+          <!-- Company Header -->
+          <div class="company-header">
+            <div class="company-name">🏢 Hệ Thống Quản Lý Kinh Doanh</div>
+            <div class="company-info">Địa chỉ: ........................ - Hotline: ........................</div>
+          </div>
+
+          <!-- Title -->
+          <div class="title">
+            <h1>PHIẾU XUẤT KHO</h1>
+            <div class="date">Ngày ${dayjs(exportTransaction.createdAt).format('DD')} tháng ${dayjs(exportTransaction.createdAt).format('MM')} năm ${dayjs(exportTransaction.createdAt).format('YYYY')}</div>
+            <div class="serial">Số phiếu: XK-${dayjs(exportTransaction.createdAt).format('YYMMDDHHmmss')}</div>
+          </div>
+
+          <div class="divider"></div>
+
+          <!-- Info Section -->
+          <table class="info-table">
+            <tr>
+              <td class="info-label">🏪 Cửa hàng:</td>
+              <td><strong>${exportTransaction.storeName}</strong></td>
+            </tr>
+            <tr>
+              <td class="info-label">📝 Lý do xuất:</td>
+              <td>${exportTransaction.reason}</td>
+            </tr>
+            <tr>
+              <td class="info-label">⏰ Thời gian:</td>
+              <td>${dayjs(exportTransaction.createdAt).format('HH:mm:ss - DD/MM/YYYY')}</td>
+            </tr>
+          </table>
+
+          <!-- Product Table -->
+          <table class="product-table">
+            <thead>
+              <tr>
+                <th style="width: 40px;">STT</th>
+                <th style="width: 35%;">Tên hàng hóa</th>
+                <th style="width: 120px;">Mã SKU</th>
+                <th style="width: 80px;">Đơn vị</th>
+                <th style="width: 100px;">Số lượng xuất</th>
+                <th>Ghi chú</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="center">1</td>
+                <td class="left"><strong>${exportTransaction.productName}</strong></td>
+                <td class="center">${exportTransaction.sku}</td>
+                <td class="center">${exportTransaction.unit}</td>
+                <td class="center"><strong style="font-size: 14px;">${exportTransaction.quantity}</strong></td>
+                <td></td>
+              </tr>
+             
+            </tbody>
+          </table>
+
+          <!-- Note Section -->
+          <div class="note-section">
+            <div class="note-label">📌 Lưu ý:</div>
+            <div>- Vui lòng kiểm tra kỹ hàng hóa trước khi nhận</div>
+            <div>- Phiếu xuất kho có giá trị trong ngày</div>
+          </div>
+
+          <!-- Signatures -->
+          <div class="signatures">
+            <div class="signature-box">
+              <div class="signature-label">Người lập phiếu</div>
+              <div class="signature-line">Ký tên</div>
+            </div>
+            <div class="signature-box">
+              <div class="signature-label">Người nhận hàng</div>
+              <div class="signature-line">Ký tên</div>
+            </div>
+            <div class="signature-box">
+              <div class="signature-label">Thủ kho</div>
+              <div class="signature-line">Ký tên</div>
+            </div>
+          </div>
+
+          <div class="print-time">
+            In lúc: ${dayjs().format('HH:mm:ss - DD/MM/YYYY')}
+          </div>
+        </div>
+        
+        <script>
+          window.onload = function() {
+            window.print();
+            window.onafterprint = function() {
+              window.close();
+            };
+          };
+        </script>
+      </body>
+      </html>
+    `;
+    
+    printWindow.document.write(printContent);
+    printWindow.document.close();
+    setPrintModalVisible(false);
   };
 
   const columns = [
@@ -533,17 +891,31 @@ const Inventory = () => {
               Điều Chỉnh
             </Button>
             {selectedRowKeys.length > 0 && (
-              <Button 
-                type="primary"
-                danger
-                icon={<EditOutlined />}
-                onClick={() => {
-                  setSelectedProduct(null);
-                  setAdjustModalVisible(true);
-                }}
-              >
-                Điều Chỉnh Đã Chọn ({selectedRowKeys.length})
-              </Button>
+              <>
+                <Button 
+                  type="primary"
+                  icon={<PlusOutlined />}
+                  onClick={() => {
+                    setSelectedProduct(null);
+                    setAdjustType('add');
+                    setImportModalVisible(true);
+                  }}
+                  style={{ background: '#52c41a', borderColor: '#52c41a' }}
+                >
+                  Nhập Kho Đã Chọn ({selectedRowKeys.length})
+                </Button>
+                <Button 
+                  type="primary"
+                  danger
+                  icon={<EditOutlined />}
+                  onClick={() => {
+                    setSelectedProduct(null);
+                    setAdjustModalVisible(true);
+                  }}
+                >
+                  Điều Chỉnh Đã Chọn ({selectedRowKeys.length})
+                </Button>
+              </>
             )}
             <Button icon={<FileExcelOutlined />} onClick={exportExcel} style={{ background: '#52c41a', color: 'white', borderColor: '#52c41a' }}>
               Xuất Báo Cáo
@@ -604,7 +976,17 @@ const Inventory = () => {
                 Table.SELECTION_NONE,
               ],
             }}
-            pagination={{ pageSize: 10, showSizeChanger: true }}
+            pagination={{
+              ...pagination,
+              total: filteredProducts.length,
+              showTotal: (total) => `Tổng ${total} sản phẩm`,
+              onChange: (page, pageSize) => {
+                setPagination({ ...pagination, current: page, pageSize });
+              },
+              onShowSizeChange: (current, size) => {
+                setPagination({ ...pagination, current: 1, pageSize: size });
+              }
+            }}
             scroll={{ x: 1400 }}
           />
         </Space>
@@ -689,7 +1071,13 @@ const Inventory = () => {
 
       {/* Import/Export Stock Modal */}
       <Modal
-        title={adjustType === 'add' ? '➕ Nhập Kho Thêm' : '➖ Xuất Kho'}
+        title={
+          selectedProduct 
+            ? (adjustType === 'add' ? '➕ Nhập Kho Thêm' : '➖ Xuất Kho')
+            : selectedRowKeys.length > 0
+              ? `${adjustType === 'add' ? '➕ Nhập' : '➖ Xuất'} Kho Hàng Loạt (${selectedRowKeys.length} sản phẩm)`
+              : (adjustType === 'add' ? '➕ Nhập Kho Thêm' : '➖ Xuất Kho')
+        }
         open={importModalVisible}
         onOk={handleImportStock}
         onCancel={() => {
@@ -700,72 +1088,96 @@ const Inventory = () => {
         }}
         okText={adjustType === 'add' ? 'Nhập Kho' : 'Xuất Kho'}
         cancelText="Hủy"
-        width={600}
+        width={selectedProduct ? 600 : 700}
       >
         <Space direction="vertical" style={{ width: '100%' }} size="large">
+          {/* Dropdown chọn sản phẩm */}
+          {!selectedProduct && selectedRowKeys.length === 0 && (
+            <div>
+              <label style={{ fontWeight: 600, marginBottom: 8, display: 'block' }}>Chọn Sản Phẩm:</label>
+              <Select
+                showSearch
+                placeholder="Tìm và chọn sản phẩm..."
+                style={{ width: '100%' }}
+                value={null}
+                onChange={(value) => {
+                  const product = products.find(p => p.id === value);
+                  setSelectedProduct(product);
+                }}
+                filterOption={(input, option) =>
+                  option.children.toLowerCase().includes(input.toLowerCase())
+                }
+              >
+                {products.map(p => (
+                  <Option key={p.id} value={p.id}>
+                    {p.name} - Tồn: {p.stock || 0} {p.unit || 'cái'}
+                  </Option>
+                ))}
+              </Select>
+            </div>
+          )}
+
+          {/* Single product info */}
+          {selectedProduct && (
+            <div style={{ padding: 12, background: '#f0f9ff', borderRadius: 8 }}>
+              <div><strong>Sản phẩm:</strong> {selectedProduct.name}</div>
+              <div><strong>SKU:</strong> {selectedProduct.sku}</div>
+              <div><strong>Tồn kho hiện tại:</strong> <span style={{ fontSize: 18, fontWeight: 'bold', color: '#1890ff' }}>{selectedProduct.stock || 0}</span> {selectedProduct.unit || 'cái'}</div>
+            </div>
+          )}
+
+          {/* Bulk products list */}
+          {!selectedProduct && selectedRowKeys.length > 0 && (
+            <div style={{ padding: 15, background: '#f6ffed', border: '1px solid #b7eb8f', borderRadius: 8 }}>
+              <div style={{ marginBottom: 10, fontWeight: 600 }}>
+                📦 Danh sách {selectedRowKeys.length} sản phẩm đã chọn:
+              </div>
+              <div style={{ maxHeight: 200, overflowY: 'auto' }}>
+                {products.filter(p => selectedRowKeys.includes(p.id)).map((p, index) => (
+                  <div key={p.id} style={{ 
+                    padding: '8px 10px', 
+                    background: '#fff', 
+                    marginBottom: 5, 
+                    borderRadius: 4,
+                    border: '1px solid #d9f7be'
+                  }}>
+                    <strong>{index + 1}.</strong> {p.name} - Tồn: <strong>{p.stock || 0}</strong>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div>
-            <label style={{ fontWeight: 600, marginBottom: 8, display: 'block' }}>Chọn Sản Phẩm:</label>
-            <Select
-              showSearch
-              placeholder="Tìm và chọn sản phẩm..."
+            <label style={{ fontWeight: 600, marginBottom: 8, display: 'block' }}>
+              Số Lượng {adjustType === 'add' ? 'Nhập' : 'Xuất'}:
+            </label>
+            <InputNumber
+              min={1}
+              value={adjustQuantity}
+              onChange={setAdjustQuantity}
               style={{ width: '100%' }}
-              value={selectedProduct?.id}
-              onChange={(value) => {
-                const product = products.find(p => p.id === value);
-                setSelectedProduct(product);
-              }}
-              filterOption={(input, option) =>
-                option.children.toLowerCase().includes(input.toLowerCase())
-              }
-            >
-              {products.map(p => (
-                <Option key={p.id} value={p.id}>
-                  {p.name} - Tồn: {p.stock || 0} {p.unit || 'cái'}
-                </Option>
-              ))}
-            </Select>
+              placeholder="Nhập số lượng..."
+            />
           </div>
 
-          {selectedProduct && (
-            <>
-              <div style={{ padding: 12, background: '#f0f9ff', borderRadius: 8 }}>
-                <div><strong>Sản phẩm:</strong> {selectedProduct.name}</div>
-                <div><strong>SKU:</strong> {selectedProduct.sku}</div>
-                <div><strong>Tồn kho hiện tại:</strong> <span style={{ fontSize: 18, fontWeight: 'bold', color: '#1890ff' }}>{selectedProduct.stock || 0}</span> {selectedProduct.unit || 'cái'}</div>
-              </div>
+          <div>
+            <label style={{ fontWeight: 600, marginBottom: 8, display: 'block' }}>Lý Do:</label>
+            <Input.TextArea
+              rows={3}
+              value={adjustReason}
+              onChange={(e) => setAdjustReason(e.target.value)}
+              placeholder={adjustType === 'add' ? 'Nhập kho từ nhà cung cấp...' : 'Xuất kho cho đơn hàng...'}
+            />
+          </div>
 
-              <div>
-                <label style={{ fontWeight: 600, marginBottom: 8, display: 'block' }}>
-                  Số Lượng {adjustType === 'add' ? 'Nhập' : 'Xuất'}:
-                </label>
-                <InputNumber
-                  min={1}
-                  value={adjustQuantity}
-                  onChange={setAdjustQuantity}
-                  style={{ width: '100%' }}
-                  placeholder="Nhập số lượng..."
-                />
-              </div>
-
-              <div>
-                <label style={{ fontWeight: 600, marginBottom: 8, display: 'block' }}>Lý Do:</label>
-                <Input.TextArea
-                  rows={3}
-                  value={adjustReason}
-                  onChange={(e) => setAdjustReason(e.target.value)}
-                  placeholder={adjustType === 'add' ? 'Nhập kho từ nhà cung cấp...' : 'Xuất kho cho đơn hàng...'}
-                />
-              </div>
-
-              {adjustQuantity > 0 && (
-                <div style={{ padding: 12, background: adjustType === 'add' ? '#f6ffed' : '#fff7e6', borderRadius: 8, border: `1px solid ${adjustType === 'add' ? '#52c41a' : '#faad14'}` }}>
-                  <strong>Tồn kho sau khi {adjustType === 'add' ? 'nhập' : 'xuất'}:</strong>{' '}
-                  <span style={{ fontSize: 18, fontWeight: 'bold', color: adjustType === 'add' ? '#52c41a' : '#faad14' }}>
-                    {adjustType === 'add' ? (selectedProduct.stock || 0) + adjustQuantity : (selectedProduct.stock || 0) - adjustQuantity}
-                  </span> {selectedProduct.unit || 'cái'}
-                </div>
-              )}
-            </>
+          {selectedProduct && adjustQuantity > 0 && (
+            <div style={{ padding: 12, background: adjustType === 'add' ? '#f6ffed' : '#fff7e6', borderRadius: 8, border: `1px solid ${adjustType === 'add' ? '#52c41a' : '#faad14'}` }}>
+              <strong>Tồn kho sau khi {adjustType === 'add' ? 'nhập' : 'xuất'}:</strong>{' '}
+              <span style={{ fontSize: 18, fontWeight: 'bold', color: adjustType === 'add' ? '#52c41a' : '#faad14' }}>
+                {adjustType === 'add' ? (selectedProduct.stock || 0) + adjustQuantity : (selectedProduct.stock || 0) - adjustQuantity}
+              </span> {selectedProduct.unit || 'cái'}
+            </div>
           )}
         </Space>
       </Modal>
@@ -973,6 +1385,101 @@ const Inventory = () => {
             </Row>
           </div>
         )}
+      </Modal>
+
+      {/* Print Confirmation Modal */}
+      <Modal
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <PrinterOutlined style={{ fontSize: 24, color: '#007A33' }} />
+            <span>In Phiếu Xuất Kho</span>
+          </div>
+        }
+        open={printModalVisible}
+        onOk={printExportReceipt}
+        onCancel={() => {
+          setPrintModalVisible(false);
+          setExportTransaction(null);
+        }}
+        okText={
+          <span>
+            <PrinterOutlined /> In Phiếu
+          </span>
+        }
+        cancelText="Hủy"
+        okButtonProps={{ style: { background: '#007A33', borderColor: '#007A33' } }}
+        width={500}
+        centered
+      >
+        <div style={{ padding: '20px 0' }}>
+          <div style={{ textAlign: 'center', marginBottom: 20 }}>
+            <div style={{ 
+              fontSize: 48, 
+              marginBottom: 10,
+              animation: 'bounce 1s ease infinite'
+            }}>
+              🖨️
+            </div>
+            <h3 style={{ color: '#007A33', marginBottom: 10 }}>
+              Xuất kho thành công!
+            </h3>
+            <p style={{ color: '#666', fontSize: 14 }}>
+              Bạn có muốn in phiếu xuất kho không?
+            </p>
+          </div>
+
+          {exportTransaction && (
+            <div style={{ 
+              background: '#f9f9f9', 
+              padding: 15, 
+              borderRadius: 8,
+              border: '1px solid #e0e0e0'
+            }}>
+              <div style={{ marginBottom: 10 }}>
+                <strong>📦 Sản phẩm:</strong>{' '}
+                <span style={{ color: '#007A33' }}>{exportTransaction.productName}</span>
+              </div>
+              <div style={{ marginBottom: 10 }}>
+                <strong>📊 Số lượng xuất:</strong>{' '}
+                <span style={{ color: '#f5222d', fontSize: 16, fontWeight: 'bold' }}>
+                  {exportTransaction.quantity}
+                </span>
+              </div>
+              <div style={{ marginBottom: 10 }}>
+                <strong>🏪 Cửa hàng:</strong>{' '}
+                <span>{exportTransaction.storeName}</span>
+              </div>
+              <div>
+                <strong>📝 Lý do:</strong>{' '}
+                <span>{exportTransaction.reason}</span>
+              </div>
+            </div>
+          )}
+
+          <div style={{ 
+            marginTop: 20, 
+            padding: 15, 
+            background: '#e6f7ff', 
+            borderRadius: 8,
+            border: '1px solid #91d5ff'
+          }}>
+            <div style={{ fontSize: 12, color: '#666', marginBottom: 5 }}>
+              💡 <strong>Lưu ý:</strong>
+            </div>
+            <ul style={{ fontSize: 12, color: '#666', paddingLeft: 20, margin: 0 }}>
+              <li>Phiếu sẽ được mở trong cửa sổ mới</li>
+              <li>Hộp thoại in sẽ tự động hiện ra</li>
+              <li>Bạn có thể lưu phiếu dưới dạng PDF</li>
+            </ul>
+          </div>
+        </div>
+
+        <style>{`
+          @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+          }
+        `}</style>
       </Modal>
     </div>
   );

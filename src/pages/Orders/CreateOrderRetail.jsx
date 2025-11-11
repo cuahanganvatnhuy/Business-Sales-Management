@@ -392,6 +392,9 @@ const CreateOrderRetail = () => {
       // Generate orderId
       const orderId = await generateOrderId('retail');
 
+      // Calculate total quantity
+      const totalQuantity = items.reduce((sum, item) => sum + (item.quantity || 0), 0);
+      
       // Create order object
       const retailOrder = {
         orderId: orderId,
@@ -405,6 +408,8 @@ const CreateOrderRetail = () => {
         shipping: shipping,
         totalAmount: finalAmount,
         totalProfit: totalProfit,
+        totalQuantity: totalQuantity,
+        totalItems: items.length,
         itemCount: items.length,
         source: 'retail_sales',
         orderType: salesChannel === 'tmdt' ? 'tmdt' : 'retail',
@@ -422,7 +427,7 @@ const CreateOrderRetail = () => {
       await push(ordersRef, retailOrder);
 
       // Deduct stock for all items
-      await deductStock(items, products, orderId, 'retail', sellingProducts);
+      await deductStock(items, products, orderId, 'retail', sellingProducts, selectedStore);
       console.log('✅ Stock deducted successfully for retail order');
 
       // Save order data and product count before reset

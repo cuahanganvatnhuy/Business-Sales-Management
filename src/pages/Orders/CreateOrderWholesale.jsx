@@ -542,6 +542,9 @@ const CreateOrderWholesale = () => {
       // Generate orderId
       const orderId = await generateOrderId('wholesale');
 
+      // Calculate total quantity
+      const totalQuantity = items.reduce((sum, item) => sum + (item.quantity || 0), 0);
+
       // Create wholesale order object
       const wholesaleOrder = {
         orderId: orderId,
@@ -559,6 +562,8 @@ const CreateOrderWholesale = () => {
         totalAmount: finalAmount,
         remainingAmount: remaining,
         totalProfit: totalProfit,
+        totalQuantity: totalQuantity,
+        totalItems: items.length,
         itemCount: items.length,
         source: 'wholesale_sales',
         orderType: 'wholesale',
@@ -575,7 +580,7 @@ const CreateOrderWholesale = () => {
       await push(ordersRef, wholesaleOrder);
 
       // Deduct stock for all items
-      await deductStock(items, products, orderId, 'wholesale', sellingProducts);
+      await deductStock(items, products, orderId, 'wholesale', sellingProducts, selectedStore);
       console.log('✅ Stock deducted successfully for wholesale order');
 
       // Save customer if checkbox is checked and not already selected from list

@@ -62,9 +62,10 @@ export const validateStock = (items, products, sellingProducts = null) => {
  * @param {String} orderId - Order ID for reference
  * @param {String} orderType - Order type (ecommerce, retail, wholesale)
  * @param {Array} sellingProducts - Optional selling products for mapping (for TMĐT orders)
+ * @param {Object} store - Optional store object {id, name}
  * @returns {Promise} Firebase update promise
  */
-export const deductStock = async (items, products, orderId, orderType, sellingProducts = null) => {
+export const deductStock = async (items, products, orderId, orderType, sellingProducts = null, store = null) => {
   const updates = {};
   const timestamp = Date.now();
   
@@ -101,6 +102,8 @@ export const deductStock = async (items, products, orderId, orderType, sellingPr
       afterQuantity: afterStock,
       reason: `Bán hàng - ${orderType === 'ecommerce' ? 'TMĐT' : orderType === 'retail' ? 'Lẻ' : 'Sỉ'}`,
       orderId: orderId,
+      storeId: store?.id || null,
+      storeName: store?.name || 'N/A',
       createdAt: new Date().toISOString()
     };
   });

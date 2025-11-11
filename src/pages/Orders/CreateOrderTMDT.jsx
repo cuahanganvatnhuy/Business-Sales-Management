@@ -566,7 +566,7 @@ const CreateOrderTMDT = () => {
       
       const allItems = orderForms.flatMap(form => form.items);
       const firstOrderId = orderForms[0]?.orderId || 'BATCH';
-      await deductStock(allItems, products, firstOrderId, 'ecommerce', sellingProducts);
+      await deductStock(allItems, products, firstOrderId, 'ecommerce', sellingProducts, selectedStore);
       
       console.log('✅ Stock deducted successfully');
       
