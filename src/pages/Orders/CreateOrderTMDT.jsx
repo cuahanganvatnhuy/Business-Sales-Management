@@ -38,6 +38,7 @@ import { database } from '../../services/firebase.service';
 import { ref, onValue, push, set } from 'firebase/database';
 import { formatCurrency } from '../../utils/format';
 import { parseExcelOrders } from '../../utils/excelOrderParser';
+import { validateStock, deductStock, checkStockAvailability } from '../../utils/inventoryHelpers';
 import dayjs from 'dayjs';
 import './Orders.css';
 
@@ -49,6 +50,7 @@ const CreateOrderTMDT = () => {
   const [mainForm] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [sellingProducts, setSellingProducts] = useState([]);
+  const [products, setProducts] = useState([]); // Products with stock info
   
   // Order info
   const [selectedPlatform, setSelectedPlatform] = useState(null);
@@ -98,6 +100,26 @@ const CreateOrderTMDT = () => {
         console.log('✅ Loaded active selling products:', productsList.length);
       } else {
         setSellingProducts([]);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Load products for stock validation
+  useEffect(() => {
+    const productsRef = ref(database, 'products');
+    const unsubscribe = onValue(productsRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const productsList = Object.entries(data).map(([id, product]) => ({
+          id,
+          ...product
+        }));
+        setProducts(productsList);
+        console.log('✅ Loaded products for stock validation:', productsList.length);
+      } else {
+        setProducts([]);
       }
     });
 
@@ -280,6 +302,19 @@ const CreateOrderTMDT = () => {
 
   // Handle quantity change for a specific item
   const handleQuantityChange = (orderId, itemKey, quantity) => {
+    // Find the item to validate stock
+    const form = orderForms.find(f => f.id === orderId);
+    const item = form?.items.find(i => i.key === itemKey);
+    
+    if (item && item.productId) {
+      const stockCheck = checkStockAvailability(item.productId, quantity, products, sellingProducts);
+      
+      if (!stockCheck.available) {
+        message.warning(stockCheck.message);
+        // Still allow update but show warning
+      }
+    }
+    
     setOrderForms(prevForms =>
       prevForms.map(form => {
         if (form.id === orderId) {
@@ -408,6 +443,52 @@ const CreateOrderTMDT = () => {
       return;
     }
 
+    // Validate stock for all items in all orders
+    const allItems = orderForms.flatMap(form => form.items);
+    
+    console.log('🔍 Validating stock...', { 
+      allItemsCount: allItems.length, 
+      productsCount: products.length,
+      allItems: allItems,
+      productIds: products.map(p => ({ id: p.id, name: p.name }))
+    });
+    
+    // Check if products are loaded
+    if (products.length === 0) {
+      Modal.warning({
+        title: 'Đang tải dữ liệu kho',
+        content: 'Vui lòng đợi dữ liệu kho hàng tải xong rồi thử lại!',
+        okText: 'Đã hiểu',
+        centered: true
+      });
+      return;
+    }
+    
+    const stockValidation = validateStock(allItems, products, sellingProducts);
+    
+    console.log('📊 Validation result:', stockValidation);
+    
+    if (!stockValidation.valid) {
+      Modal.error({
+        title: 'Không đủ hàng trong kho!',
+        content: (
+          <div>
+            {stockValidation.errors.map((error, index) => (
+              <div key={index} style={{ marginBottom: 8, color: '#ff4d4f' }}>
+                • {error}
+              </div>
+            ))}
+          </div>
+        ),
+        okText: 'Đã hiểu',
+        centered: true,
+        width: 600
+      });
+      return;
+    }
+    
+    console.log('✅ Stock validation passed, creating orders...');
+
     try {
       // Show progress modal
       setUploadProgress({ 
@@ -474,6 +555,20 @@ const CreateOrderTMDT = () => {
       }
 
       console.log('✅ Orders created successfully, count:', orderForms.length);
+      
+      // Deduct stock for all items
+      setUploadProgress({ 
+        show: true, 
+        current: orderForms.length, 
+        total: orderForms.length, 
+        message: 'Đang cập nhật tồn kho...' 
+      });
+      
+      const allItems = orderForms.flatMap(form => form.items);
+      const firstOrderId = orderForms[0]?.orderId || 'BATCH';
+      await deductStock(allItems, products, firstOrderId, 'ecommerce', sellingProducts, selectedStore);
+      
+      console.log('✅ Stock deducted successfully');
       
       // Đóng progress modal
       setUploadProgress({ show: false, current: 0, total: 0, message: '' });

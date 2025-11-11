@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Row, Col, Statistic, Table, Tag, Spin, Button, List, Checkbox } from 'antd';
+import { Card, Row, Col, Statistic, Table, Tag, Spin, Button, List, Dropdown, Menu } from 'antd';
 import { useStore } from '../../contexts/StoreContext';
 import { database } from '../../services/firebase.service';
 import { ref, onValue } from 'firebase/database';
+import { useNavigate } from 'react-router-dom';
 import {
   ShoppingCartOutlined,
   ShoppingOutlined,
@@ -15,13 +16,19 @@ import {
   BarChartOutlined,
   SettingOutlined,
   ShopOutlined,
-  UserOutlined
+  UserOutlined,
+  EyeOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  PrinterOutlined,
+  MoreOutlined
 } from '@ant-design/icons';
 import { formatCurrency } from '../../utils/format';
 import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from '../../utils/constants';
 
 const Dashboard = () => {
   const { selectedStore } = useStore();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     totalOrders: 0,
@@ -261,37 +268,137 @@ const Dashboard = () => {
         title={
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span style={{ fontSize: '16px', fontWeight: '600' }}>⚫ Đơn Hàng Gần Đây</span>
-            <Button type="link" style={{ color: '#007A33' }}>Xem Tất Cả</Button>
+            <Button type="link" style={{ color: '#007A33' }} onClick={() => navigate('/orders/manage/ecommerce')}>Xem Tất Cả</Button>
           </div>
         }
       >
         <List
           dataSource={recentOrders.slice(0, 5)}
           locale={{ emptyText: 'Chưa có đơn hàng nào' }}
-          renderItem={(order) => (
-            <List.Item
-              style={{ 
-                padding: '16px 0',
-                borderBottom: '1px solid #f0f0f0'
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', width: '100%', gap: '16px' }}>
-                <Checkbox />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 500, marginBottom: '4px' }}>
-                    📦 {order.customerName || 'Khách hàng'}
+          renderItem={(order) => {
+            const actionMenu = (
+              <Menu
+                onClick={({ key }) => {
+                  if (key === 'view') {
+                    console.log('Xem chi tiết:', order.id);
+                    // Navigate to order detail
+                  } else if (key === 'edit') {
+                    console.log('Chỉnh sửa:', order.id);
+                    // Navigate to order edit
+                  } else if (key === 'print') {
+                    console.log('In đơn hàng:', order.id);
+                    // Print order
+                  } else if (key === 'delete') {
+                    console.log('Xóa đơn hàng:', order.id);
+                    // Show delete confirmation
+                  }
+                }}
+              >
+                <Menu.Item key="view" icon={<EyeOutlined />}>
+                  Xem Chi Tiết
+                </Menu.Item>
+                <Menu.Item key="edit" icon={<EditOutlined />}>
+                  Chỉnh Sửa
+                </Menu.Item>
+                <Menu.Item key="print" icon={<PrinterOutlined />}>
+                  In Đơn Hàng
+                </Menu.Item>
+                <Menu.Divider />
+                <Menu.Item key="delete" icon={<DeleteOutlined />} danger>
+                  Xóa Đơn Hàng
+                </Menu.Item>
+              </Menu>
+            );
+
+            // Get first product item
+            const firstItem = order.items && order.items.length > 0 ? order.items[0] : {};
+            const totalQty = order.totalQuantity || (order.items ? order.items.reduce((s, item) => s + (item.quantity || 0), 0) : 0);
+
+            return (
+              <List.Item
+                style={{ 
+                  padding: '12px 0',
+                  borderBottom: '1px solid #f0f0f0',
+                  transition: 'background 0.2s'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = '#fafafa'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', width: '100%', gap: '10px' }}>
+                  
+                  {/* Loại đơn */}
+                  <div style={{ minWidth: '70px' }}>
+                    <Tag color={order.orderType === 'ecommerce' ? 'blue' : order.orderType === 'retail' ? 'green' : 'orange'} 
+                      style={{ fontSize: '11px', margin: 0, fontWeight: 600 }}>
+                      {order.orderType === 'ecommerce' ? 'TMĐT' : order.orderType === 'retail' ? 'RETAIL' : 'WHOLESALE'}
+                    </Tag>
                   </div>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <Tag color="blue" style={{ fontSize: '11px' }}>Tạo</Tag>
-                    <span style={{ fontSize: '13px', color: '#666' }}>{formatCurrency(order.totalAmount || 0)}</span>
+                  
+                  {/* Mã đơn */}
+                  <div style={{ minWidth: '130px' }}>
+                    <div style={{ fontSize: '12px', fontWeight: 600, color: '#333' }}>
+                      {order.orderId || order.id?.slice(0, 8) || 'N/A'}
+                    </div>
+                  </div>
+
+                  {/* Tên sản phẩm */}
+                  <div style={{ flex: 1, minWidth: '180px' }}>
+                    <div style={{ fontWeight: 500, fontSize: '13px', color: '#000', marginBottom: '2px' }}>
+                      {firstItem.productName || 'N/A'}
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#999' }}>
+                      {order.items && order.items.length > 1 ? `+${order.items.length - 1} sản phẩm khác` : ''}
+                    </div>
+                  </div>
+
+                  {/* Số lượng */}
+                  <div style={{ minWidth: '50px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: '#333' }}>
+                      {totalQty || 0}
+                    </div>
+                  </div>
+
+                  {/* Đơn vị */}
+                  <div style={{ minWidth: '50px', textAlign: 'center' }}>
+                    <Tag style={{ fontSize: '11px', margin: 0 }}>
+                      {firstItem.unit || 'kg'}
+                    </Tag>
+                  </div>
+
+                  {/* Giá */}
+                  <div style={{ minWidth: '90px', textAlign: 'right' }}>
+                    <div style={{ fontSize: '12px', color: '#666' }}>
+                      {formatCurrency(firstItem.sellingPrice || 0)}
+                    </div>
+                  </div>
+
+                  {/* Tổng tiền */}
+                  <div style={{ minWidth: '110px', textAlign: 'right' }}>
+                    <div style={{ fontSize: '14px', fontWeight: 700, color: '#007A33' }}>
+                      {formatCurrency(order.totalAmount || 0)}
+                    </div>
+                  </div>
+
+                  {/* Ngày tạo */}
+                  <div style={{ minWidth: '80px', textAlign: 'right', color: '#999', fontSize: '11px' }}>
+                    {new Date(order.createdAt).toLocaleDateString('vi-VN')}
+                  </div>
+
+                  {/* Actions */}
+                  <div style={{ minWidth: '35px', textAlign: 'right' }}>
+                    <Dropdown overlay={actionMenu} trigger={['click']} placement="bottomRight">
+                      <Button 
+                        type="text" 
+                        icon={<MoreOutlined />} 
+                        size="small"
+                        style={{ color: '#999' }}
+                      />
+                    </Dropdown>
                   </div>
                 </div>
-                <div style={{ textAlign: 'right', color: '#999', fontSize: '13px' }}>
-                  {new Date(order.createdAt).toLocaleDateString('vi-VN')}
-                </div>
-              </div>
-            </List.Item>
-          )}
+              </List.Item>
+            );
+          }}
         />
       </Card>
 
@@ -308,9 +415,11 @@ const Dashboard = () => {
       >
         <Row gutter={[16, 16]}>
           <Col xs={12} sm={8} md={6} lg={3}>
-            <div style={{ textAlign: 'center', cursor: 'pointer', padding: '16px', borderRadius: '8px', transition: 'all 0.3s' }}
+            <div 
+              style={{ textAlign: 'center', cursor: 'pointer', padding: '16px', borderRadius: '8px', transition: 'all 0.3s' }}
               onMouseEnter={(e) => e.currentTarget.style.background = '#f5f5f5'}
               onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+              onClick={() => navigate('/orders/create/ecommerce')}
             >
               <PlusCircleOutlined style={{ fontSize: '32px', color: '#f5576c', marginBottom: '8px' }} />
               <div style={{ fontSize: '13px', fontWeight: '500' }}>Tạo Đơn Hàng</div>
@@ -318,9 +427,11 @@ const Dashboard = () => {
             </div>
           </Col>
           <Col xs={12} sm={8} md={6} lg={3}>
-            <div style={{ textAlign: 'center', cursor: 'pointer', padding: '16px', borderRadius: '8px', transition: 'all 0.3s' }}
+            <div 
+              style={{ textAlign: 'center', cursor: 'pointer', padding: '16px', borderRadius: '8px', transition: 'all 0.3s' }}
               onMouseEnter={(e) => e.currentTarget.style.background = '#f5f5f5'}
               onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+              onClick={() => navigate('/selling-products')}
             >
               <ShoppingOutlined style={{ fontSize: '32px', color: '#fa8c16', marginBottom: '8px' }} />
               <div style={{ fontSize: '13px', fontWeight: '500' }}>Quản Lý Sản Phẩm</div>
@@ -328,9 +439,11 @@ const Dashboard = () => {
             </div>
           </Col>
           <Col xs={12} sm={8} md={6} lg={3}>
-            <div style={{ textAlign: 'center', cursor: 'pointer', padding: '16px', borderRadius: '8px', transition: 'all 0.3s' }}
+            <div 
+              style={{ textAlign: 'center', cursor: 'pointer', padding: '16px', borderRadius: '8px', transition: 'all 0.3s' }}
               onMouseEnter={(e) => e.currentTarget.style.background = '#f5f5f5'}
               onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+              onClick={() => navigate('/orders/create/ecommerce')}
             >
               <FileTextOutlined style={{ fontSize: '32px', color: '#52c41a', marginBottom: '8px' }} />
               <div style={{ fontSize: '13px', fontWeight: '500' }}>Quản Lý Đơn Hàng</div>
@@ -338,9 +451,11 @@ const Dashboard = () => {
             </div>
           </Col>
           <Col xs={12} sm={8} md={6} lg={3}>
-            <div style={{ textAlign: 'center', cursor: 'pointer', padding: '16px', borderRadius: '8px', transition: 'all 0.3s' }}
+            <div 
+              style={{ textAlign: 'center', cursor: 'pointer', padding: '16px', borderRadius: '8px', transition: 'all 0.3s' }}
               onMouseEnter={(e) => e.currentTarget.style.background = '#f5f5f5'}
               onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+              onClick={() => navigate('/stores')}
             >
               <DollarOutlined style={{ fontSize: '32px', color: '#1890ff', marginBottom: '8px' }} />
               <div style={{ fontSize: '13px', fontWeight: '500' }}>Quản Lý Cửa Hàng</div>
@@ -348,9 +463,11 @@ const Dashboard = () => {
             </div>
           </Col>
           <Col xs={12} sm={8} md={6} lg={3}>
-            <div style={{ textAlign: 'center', cursor: 'pointer', padding: '16px', borderRadius: '8px', transition: 'all 0.3s' }}
+            <div 
+              style={{ textAlign: 'center', cursor: 'pointer', padding: '16px', borderRadius: '8px', transition: 'all 0.3s' }}
               onMouseEnter={(e) => e.currentTarget.style.background = '#f5f5f5'}
               onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+              onClick={() => navigate('/warehouse/inventory')}
             >
               <InboxOutlined style={{ fontSize: '32px', color: '#722ed1', marginBottom: '8px' }} />
               <div style={{ fontSize: '13px', fontWeight: '500' }}>Quản Lý Kho</div>
@@ -358,9 +475,11 @@ const Dashboard = () => {
             </div>
           </Col>
           <Col xs={12} sm={8} md={6} lg={3}>
-            <div style={{ textAlign: 'center', cursor: 'pointer', padding: '16px', borderRadius: '8px', transition: 'all 0.3s' }}
+            <div 
+              style={{ textAlign: 'center', cursor: 'pointer', padding: '16px', borderRadius: '8px', transition: 'all 0.3s' }}
               onMouseEnter={(e) => e.currentTarget.style.background = '#f5f5f5'}
               onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+              onClick={() => navigate('/finance')}
             >
               <TeamOutlined style={{ fontSize: '32px', color: '#eb2f96', marginBottom: '8px' }} />
               <div style={{ fontSize: '13px', fontWeight: '500' }}>Quản Lý Lợi Nhuận</div>
@@ -368,9 +487,11 @@ const Dashboard = () => {
             </div>
           </Col>
           <Col xs={12} sm={8} md={6} lg={3}>
-            <div style={{ textAlign: 'center', cursor: 'pointer', padding: '16px', borderRadius: '8px', transition: 'all 0.3s' }}
+            <div 
+              style={{ textAlign: 'center', cursor: 'pointer', padding: '16px', borderRadius: '8px', transition: 'all 0.3s' }}
               onMouseEnter={(e) => e.currentTarget.style.background = '#f5f5f5'}
               onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+              onClick={() => navigate('/orders/manage/retail')}
             >
               <ShopOutlined style={{ fontSize: '32px', color: '#13c2c2', marginBottom: '8px' }} />
               <div style={{ fontSize: '13px', fontWeight: '500' }}>Đơn Hàng Bán</div>
@@ -378,13 +499,39 @@ const Dashboard = () => {
             </div>
           </Col>
           <Col xs={12} sm={8} md={6} lg={3}>
-            <div style={{ textAlign: 'center', cursor: 'pointer', padding: '16px', borderRadius: '8px', transition: 'all 0.3s' }}
+            <div 
+              style={{ textAlign: 'center', cursor: 'pointer', padding: '16px', borderRadius: '8px', transition: 'all 0.3s' }}
               onMouseEnter={(e) => e.currentTarget.style.background = '#f5f5f5'}
               onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+              onClick={() => navigate('/reports')}
             >
               <BarChartOutlined style={{ fontSize: '32px', color: '#faad14', marginBottom: '8px' }} />
               <div style={{ fontSize: '13px', fontWeight: '500' }}>Báo Cáo</div>
               <div style={{ fontSize: '11px', color: '#999' }}>Xem báo cáo chi tiết</div>
+            </div>
+          </Col>
+          <Col xs={12} sm={8} md={6} lg={3}>
+            <div 
+              style={{ textAlign: 'center', cursor: 'pointer', padding: '16px', borderRadius: '8px', transition: 'all 0.3s' }}
+              onMouseEnter={(e) => e.currentTarget.style.background = '#f5f5f5'}
+              onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+              onClick={() => navigate('/customers')}
+            >
+              <UserOutlined style={{ fontSize: '32px', color: '#2f54eb', marginBottom: '8px' }} />
+              <div style={{ fontSize: '13px', fontWeight: '500' }}>Quản Lý Nhân sự</div>
+              <div style={{ fontSize: '11px', color: '#999' }}>Danh sách Nhân sự</div>
+            </div>
+          </Col>
+          <Col xs={12} sm={8} md={6} lg={3}>
+            <div 
+              style={{ textAlign: 'center', cursor: 'pointer', padding: '16px', borderRadius: '8px', transition: 'all 0.3s' }}
+              onMouseEnter={(e) => e.currentTarget.style.background = '#f5f5f5'}
+              onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+              onClick={() => navigate('/settings')}
+            >
+              <SettingOutlined style={{ fontSize: '32px', color: '#8c8c8c', marginBottom: '8px' }} />
+              <div style={{ fontSize: '13px', fontWeight: '500' }}>Cài Đặt</div>
+              <div style={{ fontSize: '11px', color: '#999' }}>Cấu hình hệ thống</div>
             </div>
           </Col>
         </Row>

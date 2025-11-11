@@ -1,0 +1,222 @@
+import React, { useState, useEffect } from 'react';
+import { database } from '../../services/firebase.service';
+import { ref, onValue } from 'firebase/database';
+import {
+  Card, Table, Tag, DatePicker, Select, Button, Space, Row, Col, Tabs, Statistic, Input
+} from 'antd';
+import {
+  SwapOutlined, ImportOutlined, ExportOutlined, FileExcelOutlined,
+  EditOutlined, ShoppingCartOutlined, DollarOutlined, FilterOutlined
+} from '@ant-design/icons';
+import dayjs from 'dayjs';
+import * as XLSX from 'xlsx';
+
+const { RangePicker } = DatePicker;
+const { Option } = Select;
+const { Search } = Input;
+
+const Transactions = () => {
+  const [loading, setLoading] = useState(false);
+  const [transactions, setTransactions] = useState([]);
+  const [filteredTransactions, setFilteredTransactions] = useState([]);
+  const [activeTab, setActiveTab] = useState('export');
+  const [dateRange, setDateRange] = useState([dayjs().startOf('month'), dayjs()]);
+  const [storeFilter, setStoreFilter] = useState('all');
+  const [reasonFilter, setReasonFilter] = useState('all');
+  const [searchText, setSearchText] = useState('');
+
+  // Load transactions
+  useEffect(() => {
+    setLoading(true);
+    const transactionsRef = ref(database, 'warehouseTransactions');
+    const unsubscribe = onValue(transactionsRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const transactionsArray = Object.keys(data).map(key => ({
+          id: key,
+          ...data[key]
+        })).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        setTransactions(transactionsArray);
+      } else {
+        setTransactions([]);
+      }
+      setLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Apply filters
+  useEffect(() => {
+    let filtered = [...transactions];
+    
+    if (dateRange && dateRange[0] && dateRange[1]) {
+      filtered = filtered.filter(t => {
+        const txDate = dayjs(t.createdAt);
+        return txDate.isAfter(dateRange[0].subtract(1, 'day')) && txDate.isBefore(dateRange[1].add(1, 'day'));
+      });
+    }
+    
+    if (typeFilter !== 'all') {
+      filtered = filtered.filter(t => t.type === typeFilter);
+    }
+    
+    setFilteredTransactions(filtered);
+  }, [transactions, dateRange, typeFilter]);
+
+  // Export Excel
+  const exportExcel = () => {
+    const data = filteredTransactions.map((t, i) => ({
+      'STT': i + 1,
+      'Ngày': dayjs(t.createdAt).format('DD/MM/YYYY HH:mm'),
+      'Loại': t.type === 'import' ? 'Nhập kho' : 'Xuất kho',
+      'Sản Phẩm': t.productName,
+      'SKU': t.sku,
+      'Số Lượng': t.quantity,
+      'Tồn Trước': t.beforeQuantity,
+      'Tồn Sau': t.afterQuantity,
+      'Lý Do': t.reason
+    }));
+    
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Giao Dịch Kho');
+    XLSX.writeFile(wb, `GiaoDichKho_${dayjs().format('YYYYMMDD')}.xlsx`);
+  };
+
+  const columns = [
+    {
+      title: 'STT',
+      key: 'stt',
+      width: 60,
+      align: 'center',
+      render: (_, __, index) => index + 1
+    },
+    {
+      title: 'Ngày Giờ',
+      dataIndex: 'createdAt',
+      key: 'createdAt',
+      width: 150,
+      sorter: (a, b) => new Date(a.createdAt) - new Date(b.createdAt),
+      render: (date) => dayjs(date).format('DD/MM/YYYY HH:mm')
+    },
+    {
+      title: 'Loại GD',
+      dataIndex: 'type',
+      key: 'type',
+      width: 100,
+      align: 'center',
+      render: (type) => type === 'import' 
+        ? <Tag color="green" icon={<ImportOutlined />}>Nhập</Tag>
+        : <Tag color="red" icon={<ExportOutlined />}>Xuất</Tag>
+    },
+    {
+      title: 'Sản Phẩm',
+      dataIndex: 'productName',
+      key: 'productName',
+      width: 200
+    },
+    {
+      title: 'SKU',
+      dataIndex: 'sku',
+      key: 'sku',
+      width: 120
+    },
+    {
+      title: 'Số Lượng',
+      dataIndex: 'quantity',
+      key: 'quantity',
+      width: 100,
+      align: 'center',
+      render: (qty, record) => (
+        <span style={{ fontWeight: 'bold', color: record.type === 'import' ? '#52c41a' : '#f5222d' }}>
+          {record.type === 'import' ? '+' : '-'}{qty}
+        </span>
+      )
+    },
+    {
+      title: 'Tồn Trước',
+      dataIndex: 'beforeQuantity',
+      key: 'beforeQuantity',
+      width: 100,
+      align: 'center'
+    },
+    {
+      title: 'Tồn Sau',
+      dataIndex: 'afterQuantity',
+      key: 'afterQuantity',
+      width: 100,
+      align: 'center',
+      render: (qty) => <span style={{ fontWeight: 'bold' }}>{qty}</span>
+    },
+    {
+      title: 'Lý Do',
+      dataIndex: 'reason',
+      key: 'reason',
+      width: 200
+    }
+  ];
+
+  return (
+    <div style={{ padding: '24px' }}>
+      {/* Header */}
+      <Card style={{ marginBottom: 24, borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <SwapOutlined style={{ fontSize: 32, color: '#007A33' }} />
+          <div>
+            <h1 style={{ margin: 0, fontSize: 24, color: '#007A33' }}>Quản Lý Giao Dịch Kho</h1>
+            <p style={{ margin: 0, color: '#666' }}>Lịch sử nhập xuất kho</p>
+          </div>
+        </div>
+      </Card>
+
+      {/* Filters & Actions */}
+      <Card title="Lịch Sử Giao Dịch" style={{ marginBottom: 24, borderRadius: 12 }}>
+        <Space direction="vertical" style={{ width: '100%' }} size="large">
+          <Row gutter={16}>
+            <Col xs={24} md={12}>
+              <RangePicker
+                value={dateRange}
+                onChange={setDateRange}
+                style={{ width: '100%' }}
+                format="DD/MM/YYYY"
+              />
+            </Col>
+            <Col xs={24} md={8}>
+              <Select
+                placeholder="Loại giao dịch"
+                value={typeFilter}
+                onChange={setTypeFilter}
+                style={{ width: '100%' }}
+              >
+                <Option value="all">Tất cả</Option>
+                <Option value="import">Nhập kho</Option>
+                <Option value="export">Xuất kho</Option>
+              </Select>
+            </Col>
+            <Col xs={24} md={4}>
+              <Button
+                type="primary"
+                icon={<FileExcelOutlined />}
+                onClick={exportExcel}
+                style={{ width: '100%', background: '#52c41a', borderColor: '#52c41a' }}
+              >
+                Xuất Excel
+              </Button>
+            </Col>
+          </Row>
+
+          <Table
+            columns={columns}
+            dataSource={filteredTransactions}
+            rowKey="id"
+            loading={loading}
+            pagination={{ pageSize: 20, showSizeChanger: true }}
+            scroll={{ x: 1200 }}
+          />
+        </Space>
+      </Card>
+    </div>
+  );
+};
+
+export default Transactions;

@@ -16,7 +16,8 @@ import {
   ShopOutlined,
   DollarOutlined,
   PlusOutlined,
-  EnvironmentOutlined
+  EnvironmentOutlined,
+  LineChartOutlined
 } from '@ant-design/icons';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
@@ -192,9 +193,31 @@ const MainLayout = () => {
       label: 'Báo Cáo',
     },
     {
-      key: '/warehouse',
+      key: 'warehouse',
       icon: <InboxOutlined />,
       label: 'Quản Lý Kho',
+      children: [
+        {
+          key: '/warehouse/inventory',
+          icon: <InboxOutlined />,
+          label: 'Kho Hàng',
+        },
+        {
+          key: '/warehouse/transactions',
+          icon: <i className="fas fa-exchange-alt" />,
+          label: 'Quản Lý Giao Dịch',
+        },
+        {
+          key: '/warehouse/usage-report',
+          icon: <LineChartOutlined />,
+          label: 'Báo Cáo Sử Dụng',
+        },
+        {
+          key: '/warehouse/order-report',
+          icon: <ShoppingCartOutlined />,
+          label: 'Báo Cáo Đơn Hàng',
+        },
+      ]
     },
     {
       key: '/shipping-costs',
@@ -236,7 +259,7 @@ const MainLayout = () => {
     menuItems.splice(menuItems.length - 1, 0, {
       key: '/users',
       icon: <TeamOutlined />,
-      label: 'Quản Lý Người Dùng',
+      label: 'Quản Lý Nhân sự',
     });
   }
 

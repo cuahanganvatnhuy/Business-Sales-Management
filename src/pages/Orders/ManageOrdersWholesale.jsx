@@ -34,7 +34,8 @@ import {
   PrinterOutlined,
   EyeOutlined,
   EditOutlined,
-  MoreOutlined
+  MoreOutlined,
+  EllipsisOutlined
 } from '@ant-design/icons';
 import { formatCurrency } from '../../utils/format';
 import dayjs from 'dayjs';
@@ -1255,7 +1256,7 @@ const ManageOrdersWholesale = () => {
               placement="bottomRight"
             >
               <Button
-                icon={<MoreOutlined />}
+                icon={<EllipsisOutlined style={{ fontSize: 20, fontWeight: 'bold' }} />}
                 size="small"
               />
             </Dropdown>

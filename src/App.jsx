@@ -12,6 +12,8 @@ import Categories from './pages/Categories';
 import SellingProducts from './pages/SellingProducts';
 import { CreateOrderTMDT, CreateOrderRetail, CreateOrderWholesale, ManageOrdersTMDT, ManageOrdersRetail, ManageOrdersWholesale, DebtManagement, DebtDashboard } from './pages/Orders';
 import { ManageStores } from './pages/Stores';
+import Reports from './pages/Reports';
+import { Inventory, Transactions, UsageReport, OrderReport } from './pages/Warehouse';
 import MainLayout from './components/Layout/MainLayout';
 import './App.css';
 
@@ -65,6 +67,18 @@ function App() {
               
               {/* Stores Route */}
               <Route path="stores" element={<ManageStores />} />
+              
+              {/* Reports Route */}
+              <Route path="reports" element={<Reports />} />
+              
+              {/* Warehouse Routes */}
+              <Route path="warehouse">
+                <Route index element={<Navigate to="inventory" replace />} />
+                <Route path="inventory" element={<Inventory />} />
+                <Route path="transactions" element={<Transactions />} />
+                <Route path="usage-report" element={<UsageReport />} />
+                <Route path="order-report" element={<OrderReport />} />
+              </Route>
               
               {/* Sẽ thêm routes khác sau */}
             </Route>
