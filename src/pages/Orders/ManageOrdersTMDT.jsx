@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { database } from '../../services/firebase.service';
 import { useStore } from '../../contexts/StoreContext';
-import { ref, onValue, remove } from 'firebase/database';
+import { ref, onValue, remove, update } from 'firebase/database';
 import {
   Card,
   Table,
@@ -33,7 +33,8 @@ import {
   PrinterOutlined,
   EyeOutlined,
   MoreOutlined,
-  EllipsisOutlined
+  EllipsisOutlined,
+  SyncOutlined
 } from '@ant-design/icons';
 import { formatCurrency } from '../../utils/format';
 import dayjs from 'dayjs';
@@ -78,10 +79,14 @@ const ManageOrdersTMDT = () => {
           
           // Group all items into order summary
           if (order.items && Array.isArray(order.items) && order.items.length > 0) {
-            // Calculate totals from all items
-            const totalQuantity = order.items.reduce((sum, item) => sum + (item.quantity || 0), 0);
-            const totalSubtotal = order.items.reduce((sum, item) => sum + (item.subtotal || 0), 0);
-            const totalProfit = order.items.reduce((sum, item) => sum + (item.profit || 0), 0);
+            // Calculate totals for multi-item orders
+            const totalQuantity = order.items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+            const totalSubtotal = order.totalAmount || order.items.reduce((sum, item) => sum + (Number(item.subtotal) || 0), 0);
+            const totalProfit = order.totalProfit || order.items.reduce((sum, item) => sum + (Number(item.profit) || 0), 0);
+            // Use first item's selling price for single-item orders, or calculate average
+            const sellingPrice = order.items.length === 1 
+              ? order.items[0].sellingPrice 
+              : order.items.reduce((sum, item) => sum + (Number(item.sellingPrice) || 0), 0) / order.items.length;
             
             // Get product names (comma separated)
             const productNames = order.items.map(item => item.productName).join(', ');
@@ -103,6 +108,7 @@ const ManageOrdersTMDT = () => {
               itemCount: order.items.length,
               quantity: totalQuantity,
               unit: order.items[0]?.unit || 'kg', // Use first item's unit
+              sellingPrice: sellingPrice, // Add sellingPrice here
               subtotal: totalSubtotal,
               profit: totalProfit,
               // Store items for detail view
@@ -125,7 +131,12 @@ const ManageOrdersTMDT = () => {
         ordersArray.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
         
         console.log('📦 Loaded orders:', ordersArray.length);
-        console.log('📊 Sample order:', ordersArray[0]);
+        console.log('📊 Sample order:', {
+          orderId: ordersArray[0]?.orderId,
+          sellingPrice: ordersArray[0]?.sellingPrice,
+          firstItemSellingPrice: ordersArray[0]?.items?.[0]?.sellingPrice,
+          subtotal: ordersArray[0]?.subtotal
+        });
         
         setOrders(ordersArray);
         setFilteredOrders(ordersArray);
@@ -268,6 +279,106 @@ const ManageOrdersTMDT = () => {
     } catch (error) {
       console.error('Error deleting all orders:', error);
       message.error('Lỗi khi xóa đơn hàng: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Sync selling prices from current product data
+  const handleSyncSellingPrices = async () => {
+    if (filteredOrders.length === 0) {
+      message.warning('Không có đơn hàng nào để đồng bộ giá!');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      
+      // Load current selling products
+      const sellingProductsRef = ref(database, 'sellingProducts');
+      const sellingProductsSnapshot = await new Promise((resolve) => {
+        onValue(sellingProductsRef, resolve, { onlyOnce: true });
+      });
+      
+      const sellingProductsData = sellingProductsSnapshot.val();
+      if (!sellingProductsData) {
+        message.error('Không tìm thấy dữ liệu sản phẩm bán!');
+        return;
+      }
+
+      const sellingProductsMap = {};
+      Object.entries(sellingProductsData).forEach(([id, product]) => {
+        sellingProductsMap[product.sku] = product.sellingPrice || 0;
+      });
+
+      let updatedCount = 0;
+      const updatePromises = [];
+
+      for (const order of filteredOrders) {
+        if (order.items && Array.isArray(order.items)) {
+          // Multi-item order
+          let hasUpdates = false;
+          const updatedItems = order.items.map(item => {
+            const currentSellingPrice = sellingProductsMap[item.sku];
+            if (currentSellingPrice && currentSellingPrice !== item.sellingPrice) {
+              hasUpdates = true;
+              const newSubtotal = currentSellingPrice * item.quantity;
+              const newProfit = (currentSellingPrice - item.importPrice) * item.quantity;
+              return {
+                ...item,
+                sellingPrice: currentSellingPrice,
+                subtotal: newSubtotal,
+                profit: newProfit
+              };
+            }
+            return item;
+          });
+
+          if (hasUpdates) {
+            const totalSubtotal = updatedItems.reduce((sum, item) => sum + (item.subtotal || 0), 0);
+            const totalProfit = updatedItems.reduce((sum, item) => sum + (item.profit || 0), 0);
+            
+            const orderRef = ref(database, `salesOrders/${order.id}`);
+            updatePromises.push(
+              update(orderRef, {
+                items: updatedItems,
+                totalAmount: totalSubtotal,
+                totalProfit: totalProfit,
+                updatedAt: new Date().toISOString()
+              })
+            );
+            updatedCount++;
+          }
+        } else {
+          // Single-item order (legacy format)
+          const currentSellingPrice = sellingProductsMap[order.sku];
+          if (currentSellingPrice && currentSellingPrice !== order.sellingPrice) {
+            const newSubtotal = currentSellingPrice * order.quantity;
+            const newProfit = (currentSellingPrice - order.importPrice) * order.quantity;
+            
+            const orderRef = ref(database, `salesOrders/${order.id}`);
+            updatePromises.push(
+              update(orderRef, {
+                sellingPrice: currentSellingPrice,
+                subtotal: newSubtotal,
+                profit: newProfit,
+                updatedAt: new Date().toISOString()
+              })
+            );
+            updatedCount++;
+          }
+        }
+      }
+
+      if (updatePromises.length > 0) {
+        await Promise.all(updatePromises);
+        message.success(`Đã đồng bộ giá bán cho ${updatedCount} đơn hàng!`);
+      } else {
+        message.info('Tất cả đơn hàng đã có giá bán mới nhất!');
+      }
+    } catch (error) {
+      console.error('Error syncing selling prices:', error);
+      message.error('Lỗi khi đồng bộ giá bán: ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -733,6 +844,14 @@ const ManageOrdersTMDT = () => {
       width: 120,
       align: 'right',
       render: (price, record) => {
+        console.log('Rendering sellingPrice:', {
+          orderId: record.orderId,
+          directPrice: price,
+          recordSellingPrice: record.sellingPrice,
+          hasItems: !!record.items,
+          firstItemSellingPrice: record.items?.[0]?.sellingPrice
+        });
+        
         // If has items array, calculate average or show first item price
         if (record.items && record.items.length > 0) {
           if (record.items.length === 1) {
@@ -995,6 +1114,23 @@ const ManageOrdersTMDT = () => {
         title={<><ShoppingOutlined /> Danh Sách Đơn Hàng TMĐT</>}
         extra={
           <Space>
+            <Popconfirm
+              title="Đồng bộ giá bán từ dữ liệu hiện tại?"
+              description="Cập nhật giá bán cho tất cả đơn hàng từ giá bán hiện tại trong quản lý sản phẩm bán"
+              onConfirm={handleSyncSellingPrices}
+              okText="Đồng bộ"
+              cancelText="Hủy"
+              disabled={filteredOrders.length === 0}
+            >
+              <Button
+                type="primary"
+                icon={<SyncOutlined />}
+                disabled={filteredOrders.length === 0}
+                style={{ background: '#1890ff', borderColor: '#1890ff' }}
+              >
+                Đồng Bộ Giá Bán
+              </Button>
+            </Popconfirm>
             <Button
               type="primary"
               icon={<PrinterOutlined />}

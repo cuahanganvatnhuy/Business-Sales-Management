@@ -16,6 +16,7 @@ import Reports from './pages/Reports';
 import { Inventory, Transactions, UsageReport, OrderReport } from './pages/Warehouse';
 import ShippingCost from './pages/ShippingCost';
 import { GlobalInvoice, StoreInvoice, PaymentInvoice } from './pages/Invoices';
+import { FinancialTransactions, ProfitOverview, EcommerceProfit, RetailProfit, WholesaleProfit } from './pages/Finance';
 import MainLayout from './components/Layout/MainLayout';
 import './App.css';
 
@@ -93,7 +94,15 @@ function App() {
                 <Route path="payment" element={<PaymentInvoice />} />
               </Route>
               
-              {/* Sẽ thêm routes khác sau */}
+              {/* Finance Routes */}
+              <Route path="finance">
+                <Route index element={<Navigate to="transactions" replace />} />
+                <Route path="transactions" element={<FinancialTransactions />} />
+                <Route path="overview" element={<ProfitOverview />} />
+                <Route path="ecommerce-profit" element={<EcommerceProfit />} />
+                <Route path="retail-profit" element={<RetailProfit />} />
+                <Route path="wholesale-profit" element={<WholesaleProfit />} />
+              </Route>
             </Route>
             
             {/* Redirect mọi route không tồn tại về dashboard */}

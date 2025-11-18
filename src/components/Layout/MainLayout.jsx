@@ -166,22 +166,22 @@ const MainLayout = () => {
           label: 'Giao Dịch Tài Chính',
         },
         {
-          key: '/finance/profit-overview',
+          key: '/finance/overview',
           icon: <i className="fas fa-chart-pie" />,
           label: 'Tổng Quan Lợi Nhuận',
         },
         {
-          key: '/finance/profit-ecommerce',
+          key: '/finance/ecommerce-profit',
           icon: <ShoppingCartOutlined />,
           label: 'Lợi Nhuận Đơn TMĐT',
         },
         {
-          key: '/finance/profit-retail',
+          key: '/finance/retail-profit',
           icon: <ShopOutlined />,
           label: 'Lợi Nhuận Đơn Lẻ',
         },
         {
-          key: '/finance/profit-wholesale',
+          key: '/finance/wholesale-profit',
           icon: <i className="fas fa-warehouse" />,
           label: 'Lợi Nhuận Đơn Sỉ',
         },

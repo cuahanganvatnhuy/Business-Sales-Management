@@ -39,6 +39,7 @@ import { ref, onValue, push, set } from 'firebase/database';
 import { formatCurrency } from '../../utils/format';
 import { parseExcelOrders } from '../../utils/excelOrderParser';
 import { validateStock, deductStock, checkStockAvailability } from '../../utils/inventoryHelpers';
+import { calculateOrderProfit } from '../../utils/profitCalculator';
 import dayjs from 'dayjs';
 import './Orders.css';
 
@@ -71,6 +72,9 @@ const CreateOrderTMDT = () => {
   
   // Upload progress
   const [uploadProgress, setUploadProgress] = useState({ show: false, current: 0, total: 0, message: '' });
+  
+  // Profit calculation
+  const [orderProfits, setOrderProfits] = useState({});
 
   // Platforms list
   const platforms = [
@@ -186,8 +190,17 @@ const CreateOrderTMDT = () => {
       setOrderForms(forms);
       setShowForms(true);
       setUploadProgress({ show: false, current: 0, total: 0, message: '' });
-      message.success(`✅ Đã tải thành công ${parsedOrders.length} đơn hàng từ Excel!`);
       
+      // Tính lợi nhuận cho tất cả đơn hàng từ Excel
+      setTimeout(async () => {
+        for (const form of forms) {
+          await calculateOrderProfitRealtime(form.id);
+          // Delay nhỏ để tránh quá tải
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      }, 200);
+      
+      message.success(`Đã tải lên ${parsedOrders.length} đơn hàng từ file Excel!`);
       return false; // Prevent default upload
     } catch (error) {
       console.error('Error processing Excel:', error);
@@ -262,6 +275,65 @@ const CreateOrderTMDT = () => {
     );
   };
 
+  // Calculate profit for an order
+  const calculateOrderProfitRealtime = async (orderId) => {
+    console.log('🧮 Starting profit calculation for order:', orderId);
+    
+    const form = orderForms.find(f => f.id === orderId);
+    console.log('🔍 Form found:', form);
+    console.log('🔍 Form items:', form?.items);
+    console.log('🔍 Selected platform:', selectedPlatform);
+    
+    if (!form || !form.items.length || !selectedPlatform) {
+      console.log('❌ Missing requirements:', { 
+        hasForm: !!form, 
+        hasItems: form?.items?.length > 0, 
+        hasPlatform: !!selectedPlatform 
+      });
+      return;
+    }
+
+    // Chỉ tính nếu có ít nhất 1 item có productId
+    const validItems = form.items.filter(item => item.productId && item.quantity > 0);
+    console.log('🔍 All items:', form.items);
+    console.log('🔍 Valid items:', validItems);
+    console.log('🔍 Items details:', form.items.map(item => ({
+      productId: item.productId,
+      quantity: item.quantity,
+      hasProductId: !!item.productId,
+      hasQuantity: item.quantity > 0
+    })));
+    
+    if (validItems.length === 0) {
+      console.log('❌ No valid items found - items missing productId or quantity <= 0');
+      return;
+    }
+
+    try {
+      const platformName = platforms.find(p => p.value === selectedPlatform)?.label || selectedPlatform;
+      
+      // Sử dụng 'all' nếu selectedStore không có giá trị
+      const storeId = selectedStore?.id || selectedStore || 'all';
+      console.log('🔍 Store ID mapping:', { selectedStore, storeId });
+      
+      console.log('🏪 Platform info:', { selectedPlatform, platformName, selectedStore, storeId });
+      console.log('📦 Order data:', form);
+      
+      console.log('🔄 About to call calculateOrderProfit...');
+      console.log('🔄 calculateOrderProfit function:', typeof calculateOrderProfit);
+      
+      const profit = await calculateOrderProfit(form, platformName, storeId);
+      console.log('✅ Profit calculated:', profit);
+      
+      setOrderProfits(prev => ({
+        ...prev,
+        [orderId]: profit
+      }));
+    } catch (error) {
+      console.error('❌ Error calculating profit for order', orderId, ':', error);
+    }
+  };
+
   // Handle product selection for a specific item in an order
   const handleProductChange = (orderId, itemKey, productId) => {
     const product = sellingProducts.find(p => p.id === productId);
@@ -297,6 +369,9 @@ const CreateOrderTMDT = () => {
           return form;
         })
       );
+      
+      // Tính lại lợi nhuận sau khi thay đổi sản phẩm
+      setTimeout(() => calculateOrderProfitRealtime(orderId), 500);
     }
   };
 
@@ -333,6 +408,9 @@ const CreateOrderTMDT = () => {
         return form;
       })
     );
+    
+    // Tính lại lợi nhuận sau khi thay đổi số lượng
+    setTimeout(() => calculateOrderProfitRealtime(orderId), 100);
   };
 
   // Remove product from order
@@ -348,6 +426,9 @@ const CreateOrderTMDT = () => {
         return form;
       })
     );
+    
+    // Tính lại lợi nhuận sau khi xóa sản phẩm
+    setTimeout(() => calculateOrderProfitRealtime(orderId), 100);
   };
 
   // Delete a form
@@ -519,7 +600,7 @@ const CreateOrderTMDT = () => {
         // Generate orderId: Use Excel orderId if available, else generate new one
         const generatedOrderId = form.orderId || `ECOM-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
         
-        await set(newOrderRef, {
+        const orderData = {
           // Order info
           orderId: generatedOrderId,
           orderDate: selectedDate.format('YYYY-MM-DD'),
@@ -551,10 +632,20 @@ const CreateOrderTMDT = () => {
           // Metadata
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
-        });
+        };
+        
+        console.log('💾 Saving order to Firebase:', orderData);
+        await set(newOrderRef, orderData);
       }
 
       console.log('✅ Orders created successfully, count:', orderForms.length);
+      
+      // Tính lợi nhuận cho tất cả đơn hàng vừa tạo
+      console.log('🧮 Starting profit calculation for all created orders...');
+      console.log('🔍 Selected store for profit calculation:', selectedStore);
+      for (const form of orderForms) {
+        setTimeout(() => calculateOrderProfitRealtime(form.id), 1000);
+      }
       
       // Deduct stock for all items
       setUploadProgress({ 
@@ -682,7 +773,7 @@ const CreateOrderTMDT = () => {
                 icon={<EditOutlined />}
                 onClick={() => setCreationMethod('manual')}
               >
-                ✏️ Tự Tạo Đơn
+                Tạo Đơn Thủ Công
               </Button>
               <Button
                 className={`method-button ${creationMethod === 'excel' ? 'active' : ''}`}
@@ -867,14 +958,40 @@ const CreateOrderTMDT = () => {
                       justifyContent: 'space-between',
                       alignItems: 'center'
                     }}>
-                      <span>
-                        <ShoppingCartOutlined /> Đơn Hàng Bán {form.id}
-                        {form.orderId && (
-                          <span style={{ marginLeft: 8, color: '#1890ff', fontSize: 13 }}>
-                            (Mã: {form.orderId})
-                          </span>
+                      <div>
+                        <div>
+                          <ShoppingCartOutlined /> Đơn Hàng Bán {form.id}
+                          {form.orderId && (
+                            <span style={{ marginLeft: 8, color: '#1890ff', fontSize: 13 }}>
+                              (Mã: {form.orderId})
+                            </span>
+                          )}
+                        </div>
+                        {/* Hiển thị lợi nhuận */}
+                        {orderProfits[form.id] && (
+                          <div style={{ fontSize: 12, marginTop: 4 }}>
+                            <span style={{ color: '#666' }}>Doanh thu: </span>
+                            <span style={{ color: '#1890ff', fontWeight: 'bold' }}>
+                              {formatCurrency(orderProfits[form.id].revenue)}
+                            </span>
+                            <span style={{ margin: '0 8px', color: '#666' }}>|</span>
+                            <span style={{ color: '#666' }}>Lợi nhuận: </span>
+                            <span style={{ 
+                              color: orderProfits[form.id].netProfit >= 0 ? '#52c41a' : '#ff4d4f', 
+                              fontWeight: 'bold' 
+                            }}>
+                              {formatCurrency(orderProfits[form.id].netProfit)}
+                            </span>
+                            <span style={{ 
+                              color: orderProfits[form.id].profitMargin >= 0 ? '#52c41a' : '#ff4d4f',
+                              marginLeft: 4,
+                              fontSize: 11
+                            }}>
+                              ({orderProfits[form.id].profitMargin.toFixed(1)}%)
+                            </span>
+                          </div>
                         )}
-                      </span>
+                      </div>
                       {orderForms.length > 1 && (
                         <Button
                           danger
@@ -1056,6 +1173,88 @@ const CreateOrderTMDT = () => {
                           </strong>
                         </div>
                       </div>
+                      
+                      {/* Chi tiết phí */}
+                      {orderProfits[form.id] && (
+                        <div style={{ 
+                          marginTop: 16, 
+                          padding: '12px 16px',
+                          background: '#f8f9fa',
+                          borderRadius: '6px',
+                          border: '1px solid #e8e8e8'
+                        }}>
+                          <div style={{ 
+                            fontSize: 13, 
+                            fontWeight: 'bold', 
+                            marginBottom: 8,
+                            color: '#666'
+                          }}>
+                            📊 Chi tiết phí và lợi nhuận:
+                          </div>
+                          
+                          <Row gutter={[16, 8]} style={{ fontSize: 12 }}>
+                            <Col span={8}>
+                              <div>💰 Doanh thu: <strong style={{ color: '#1890ff' }}>
+                                {formatCurrency(orderProfits[form.id].revenue)}
+                              </strong></div>
+                            </Col>
+                            <Col span={8}>
+                              <div>📦 Chi phí hàng: <strong style={{ color: '#ff7875' }}>
+                                {formatCurrency(orderProfits[form.id].costOfGoods)}
+                              </strong></div>
+                            </Col>
+                            <Col span={8}>
+                              <div>📈 Lợi nhuận gốc: <strong style={{ color: '#52c41a' }}>
+                                {formatCurrency(orderProfits[form.id].grossProfit)}
+                              </strong></div>
+                            </Col>
+                            
+                            {orderProfits[form.id].platformFeeCost > 0 && (
+                              <Col span={8}>
+                                <div>🏪 Phí sàn: <strong style={{ color: '#fa8c16' }}>
+                                  {formatCurrency(orderProfits[form.id].platformFeeCost)}
+                                </strong></div>
+                              </Col>
+                            )}
+                            
+                            {orderProfits[form.id].externalCostAmount > 0 && (
+                              <Col span={8}>
+                                <div>🏢 Chi phí ngoài: <strong style={{ color: '#fa8c16' }}>
+                                  {formatCurrency(orderProfits[form.id].externalCostAmount)}
+                                </strong></div>
+                              </Col>
+                            )}
+                            
+                            {orderProfits[form.id].packagingCostAmount > 0 && (
+                              <Col span={8}>
+                                <div>📦 Chi phí thùng: <strong style={{ color: '#fa8c16' }}>
+                                  {formatCurrency(orderProfits[form.id].packagingCostAmount)}
+                                </strong></div>
+                              </Col>
+                            )}
+                            
+                            <Col span={24}>
+                              <div style={{ 
+                                marginTop: 8, 
+                                paddingTop: 8, 
+                                borderTop: '1px solid #d9d9d9',
+                                display: 'flex',
+                                justifyContent: 'space-between'
+                              }}>
+                                <span>🎯 <strong>Lợi nhuận cuối:</strong></span>
+                                <span style={{ 
+                                  color: orderProfits[form.id].netProfit >= 0 ? '#52c41a' : '#ff4d4f',
+                                  fontWeight: 'bold',
+                                  fontSize: 14
+                                }}>
+                                  {formatCurrency(orderProfits[form.id].netProfit)} 
+                                  ({orderProfits[form.id].profitMargin.toFixed(1)}%)
+                                </span>
+                              </div>
+                            </Col>
+                          </Row>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div style={{ textAlign: 'end', padding: '5px 0' }}>
