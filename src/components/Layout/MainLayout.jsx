@@ -24,6 +24,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useStore } from '../../contexts/StoreContext';
 import { database } from '../../services/firebase.service';
 import { ref, onValue } from 'firebase/database';
+import ChatBot from '../ChatBot';
 import './MainLayout.css';
 
 const { Header, Sider, Content } = Layout;
@@ -804,6 +805,9 @@ const MainLayout = () => {
           )}
         </div>
       </Modal>
+
+      {/* AI ChatBot Support */}
+      <ChatBot />
     </Layout>
   );
 };
