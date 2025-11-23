@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { database } from '../../services/firebase.service';
 import { useStore } from '../../contexts/StoreContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { ref, onValue } from 'firebase/database';
 import {
   Card,
@@ -26,6 +27,20 @@ import { Line, Column, Pie } from '@ant-design/plots';
 const DebtDashboard = () => {
   const { selectedStore } = useStore();
   const navigate = useNavigate();
+  const { user, isAdmin } = useAuth();
+  const hasPermission = isAdmin || (user?.permissions || []).includes('orders.debt.dashboard.view');
+
+  if (!hasPermission) {
+    return (
+      <div style={{ padding: '24px' }}>
+        <Card>
+          <h1>Không có quyền truy cập</h1>
+          <p>Bạn không được phép truy cập trang Dashboard Công Nợ. Vui lòng liên hệ quản trị viên để được cấp quyền.</p>
+        </Card>
+      </div>
+    );
+  }
+
   const [loading, setLoading] = useState(false);
   const [debtData, setDebtData] = useState({
     totalDebt: 0,

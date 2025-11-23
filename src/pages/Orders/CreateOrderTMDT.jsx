@@ -41,6 +41,7 @@ import { parseExcelOrders } from '../../utils/excelOrderParser';
 import { validateStock, deductStock, checkStockAvailability } from '../../utils/inventoryHelpers';
 import { calculateOrderProfit } from '../../utils/profitCalculator';
 import dayjs from 'dayjs';
+import { useAuth } from '../../contexts/AuthContext';
 import './Orders.css';
 
 const { Option } = Select;
@@ -48,6 +49,8 @@ const { Option } = Select;
 const CreateOrderTMDT = () => {
   const navigate = useNavigate();
   const { selectedStore } = useStore();
+  const { user, isAdmin } = useAuth();
+  const hasPermission = isAdmin || (user?.permissions || []).includes('orders.create.ecommerce');
   const [mainForm] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [sellingProducts, setSellingProducts] = useState([]);
@@ -685,6 +688,17 @@ const CreateOrderTMDT = () => {
   };
 
   const { totalAmount, totalProfit } = calculateTotals();
+
+  if (!hasPermission) {
+    return (
+      <div style={{ padding: '24px' }}>
+        <Card>
+          <h1>Không có quyền truy cập</h1>
+          <p>Bạn không được phép truy cập trang Tạo Đơn Hàng TMĐT. Vui lòng liên hệ quản trị viên để được cấp quyền.</p>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <Spin spinning={loading}>

@@ -22,6 +22,7 @@ import dayjs from 'dayjs';
 import { database } from '../../services/firebase.service';
 import { ref, onValue } from 'firebase/database';
 import * as XLSX from 'xlsx';
+import { useAuth } from '../../contexts/AuthContext';
 import ExternalCostSettings from './components/ExternalCostSettings';
 import RetailOrderDetailModal from './components/RetailOrderDetailModal';
 
@@ -30,6 +31,20 @@ const { Option } = Select;
 const { Title, Text } = Typography;
 
 const WholesaleProfit = () => {
+  const { user, isAdmin } = useAuth();
+  const hasPermission = isAdmin || (user?.permissions || []).includes('finance.profit.wholesale.view');
+
+  if (!hasPermission) {
+    return (
+      <div style={{ padding: '24px' }}>
+        <Card>
+          <h1>Không có quyền truy cập</h1>
+          <p>Bạn không được phép truy cập trang Lợi Nhuận Đơn Sỉ. Vui lòng liên hệ quản trị viên để được cấp quyền.</p>
+        </Card>
+      </div>
+    );
+  }
+
   const [loading, setLoading] = useState(false);
   const [orders, setOrders] = useState([]);
   const [filteredOrders, setFilteredOrders] = useState([]);

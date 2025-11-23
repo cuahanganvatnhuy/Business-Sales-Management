@@ -5,6 +5,7 @@ import { database } from '../../services/firebase.service';
 import { ref, onValue, push, set, remove } from 'firebase/database';
 import { formatCurrency } from '../../utils/format';
 import * as XLSX from 'xlsx';
+import { useAuth } from '../../contexts/AuthContext';
 import './Products.css';
 
 const { TextArea } = Input;
@@ -12,6 +13,8 @@ const { Option } = Select;
 
 const AddProduct = () => {
   const [form] = Form.useForm();
+  const { user, isAdmin } = useAuth();
+  const hasPermission = isAdmin || (user?.permissions || []).includes('products.add');
   const [loading, setLoading] = useState(false);
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -564,11 +567,21 @@ const AddProduct = () => {
     }
   ];
 
+  if (!hasPermission) {
+    return (
+      <div style={{ padding: '24px' }}>
+        <Card>
+          <h1>Không có quyền truy cập</h1>
+          <p>Bạn không được phép truy cập trang Thêm Sản Phẩm. Vui lòng liên hệ quản trị viên để được cấp quyền.</p>
+        </Card>
+      </div>
+    );
+  }
+
   return (
-    <div className="add-product-page">
+    <div style={{ padding: '24px' }}>
       <Spin spinning={loading}>
-        {/* Add Product Form */}
-        <Card 
+        <Card
           title={
             <span>
               <PlusOutlined /> Thêm Sản Phẩm Mới

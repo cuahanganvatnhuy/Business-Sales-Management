@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, Row, Col, Statistic, Table, Button, Modal, Form, Input, Select, DatePicker, InputNumber, Tag, message, Dropdown, Space, Descriptions, Popconfirm } from 'antd';
 import { TruckOutlined, DollarOutlined, CalculatorOutlined, LineChartOutlined, PlusOutlined, ExportOutlined, FilterOutlined, MoreOutlined, EyeOutlined, EditOutlined, DeleteOutlined, PrinterOutlined } from '@ant-design/icons';
 import { useStore } from '../../contexts/StoreContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { database } from '../../services/firebase.service';
 import { ref, onValue, push, set, remove, update } from 'firebase/database';
 import { formatCurrency } from '../../utils/format';
@@ -14,7 +15,27 @@ const { TextArea } = Input;
 
 const ShippingCost = () => {
   const { selectedStore } = useStore();
+  const { user, isAdmin } = useAuth();
+  const userPermissions = user?.permissions || [];
+  const hasPermission = isAdmin || userPermissions.includes('shippingcost.view');
+  const canAdd = isAdmin || userPermissions.includes('shippingcost.add');
+  const canEdit = isAdmin || userPermissions.includes('shippingcost.edit');
+  const canDelete = isAdmin || userPermissions.includes('shippingcost.delete');
+  const canExport = isAdmin || userPermissions.includes('shippingcost.export');
+  const canViewDetail = isAdmin || userPermissions.includes('shippingcost.viewDetail');
   const [loading, setLoading] = useState(true);
+
+  // Check page access permission
+  if (!hasPermission) {
+    return (
+      <div style={{ padding: '24px' }}>
+        <Card>
+          <h1>Không có quyền truy cập</h1>
+          <p>Bạn không được phép truy cập trang Quản Lý Chi Phí Vận Chuyển. Vui lòng liên hệ quản trị viên để được cấp quyền.</p>
+        </Card>
+      </div>
+    );
+  }
   const [shippingCosts, setShippingCosts] = useState([]);
   const [filteredData, setFilteredData] = useState([]);
   const [stores, setStores] = useState([]);
@@ -159,18 +180,21 @@ const ShippingCost = () => {
     });
   };
 
-  const openAddModal = () => {
-    setEditingId(null);
+  const handleAddNew = () => {
+    if (!canAdd) {
+      message.error('Bạn không có quyền thêm mới chi phí vận chuyển.');
+      return;
+    }
     form.resetFields();
-    form.setFieldsValue({
-      date: dayjs(),
-      storeId: selectedStore && selectedStore.id !== 'all' ? selectedStore.id : undefined
-    });
+    setEditingId(null);
     setModalVisible(true);
   };
 
   const openEditModal = (record) => {
-    setEditingId(record.id);
+    if (!canEdit) {
+      message.error('Bạn không có quyền chỉnh sửa chi phí vận chuyển.');
+      return;
+    }
     form.setFieldsValue({
       transactionType: record.transactionType,
       date: dayjs(record.date),
@@ -180,6 +204,7 @@ const ShippingCost = () => {
       shippingMethod: record.shippingMethod,
       notes: record.notes
     });
+    setEditingId(record.id);
     setModalVisible(true);
   };
 
@@ -229,6 +254,10 @@ const ShippingCost = () => {
   };
 
   const handleViewDetail = (record) => {
+    if (!canViewDetail) {
+      message.error('Bạn không có quyền xem chi tiết chi phí vận chuyển.');
+      return;
+    }
     setViewingRecord(record);
     setDetailModalVisible(true);
   };
@@ -268,6 +297,10 @@ const ShippingCost = () => {
   };
 
   const handleDelete = async (id) => {
+    if (!canDelete) {
+      message.error('Bạn không có quyền xóa chi phí vận chuyển.');
+      return;
+    }
     try {
       await remove(ref(database, `shippingCosts/${id}`));
       message.success('Xóa chi phí vận chuyển thành công!');
@@ -300,6 +333,10 @@ const ShippingCost = () => {
   };
 
   const exportToExcel = () => {
+    if (!canExport) {
+      message.error('Bạn không có quyền xuất báo cáo chi phí vận chuyển.');
+      return;
+    }
     const exportData = filteredData.map((item, index) => ({
       'STT': index + 1,
       'Ngày': dayjs(item.date).format('DD/MM/YYYY HH:mm'),
@@ -606,16 +643,24 @@ const ShippingCost = () => {
           <Col>
             <Button onClick={clearFilters}>Xóa Lọc</Button>
           </Col>
-          <Col>
-            <Button type="primary" icon={<PlusOutlined />} onClick={openAddModal}>
-              Thêm Chi Phí Vận Chuyển
-            </Button>
-          </Col>
-          <Col>
-            <Button icon={<ExportOutlined />} onClick={exportToExcel} style={{ background: '#52c41a', color: 'white' }}>
-              Xuất Excel
-            </Button>
-          </Col>
+          {canAdd && (
+            <Col>
+              <Button type="primary" icon={<PlusOutlined />} onClick={handleAddNew}>
+                Thêm Chi Phí Vận Chuyển
+              </Button>
+            </Col>
+          )}
+          {canExport && (
+            <Col>
+              <Button 
+                icon={<ExportOutlined />} 
+                onClick={exportToExcel}
+                style={{ marginLeft: 8 }}
+              >
+                Xuất Excel
+              </Button>
+            </Col>
+          )}
         </Row>
       </Card>
 

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { database } from '../../services/firebase.service';
 import { useStore } from '../../contexts/StoreContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { ref, onValue, remove, update } from 'firebase/database';
 import {
   Card,
@@ -47,7 +48,26 @@ const { Option } = Select;
 const ManageOrdersWholesale = () => {
   const navigate = useNavigate();
   const { selectedStore, stores } = useStore();
-  
+  const { user, isAdmin } = useAuth();
+  const userPermissions = user?.permissions || [];
+  const hasPermission = isAdmin || userPermissions.includes('orders.manage.wholesale.view');
+  const canViewDetail = isAdmin || userPermissions.includes('orders.manage.wholesale.detail');
+  const canEditOrder = isAdmin || userPermissions.includes('orders.manage.wholesale.edit');
+  const canDeleteSingle = isAdmin || userPermissions.includes('orders.manage.wholesale.delete.single');
+  const canDeleteBulk = isAdmin || userPermissions.includes('orders.manage.wholesale.delete.bulk');
+  const canDeleteAll = isAdmin || userPermissions.includes('orders.manage.wholesale.delete.all');
+
+  if (!hasPermission) {
+    return (
+      <div style={{ padding: '24px' }}>
+        <Card>
+          <h1>Không có quyền truy cập</h1>
+          <p>Bạn không được phép truy cập trang Quản Lý Đơn Hàng Bán Sỉ. Vui lòng liên hệ quản trị viên để được cấp quyền.</p>
+        </Card>
+      </div>
+    );
+  }
+
   // States
   const [orders, setOrders] = useState([]);
   const [filteredOrders, setFilteredOrders] = useState([]);
@@ -219,6 +239,10 @@ const ManageOrdersWholesale = () => {
 
   // Delete single order
   const handleDeleteOrder = async (record) => {
+    if (!canDeleteSingle) {
+      message.error('Bạn không có quyền xóa đơn hàng.');
+      return;
+    }
     try {
       const orderRef = ref(database, `salesOrders/${record.id}`);
       await remove(orderRef);
@@ -234,6 +258,11 @@ const ManageOrdersWholesale = () => {
   const handleDeleteSelected = async () => {
     if (selectedRowKeys.length === 0) {
       message.warning('Vui lòng chọn ít nhất 1 đơn hàng để xóa!');
+      return;
+    }
+
+    if (!canDeleteBulk) {
+      message.error('Bạn không có quyền xóa nhiều đơn hàng.');
       return;
     }
 
@@ -260,6 +289,11 @@ const ManageOrdersWholesale = () => {
   const handleDeleteAll = async () => {
     if (filteredOrders.length === 0) {
       message.warning('Không có đơn hàng nào để xóa!');
+      return;
+    }
+
+    if (!canDeleteAll) {
+      message.error('Bạn không có quyền xóa tất cả đơn hàng.');
       return;
     }
 
@@ -432,12 +466,20 @@ const ManageOrdersWholesale = () => {
 
   // View order detail
   const handleViewDetail = (record) => {
+    if (!canViewDetail) {
+      message.error('Bạn không có quyền xem chi tiết đơn hàng.');
+      return;
+    }
     setSelectedOrder(record);
     setDetailModalVisible(true);
   };
 
   // Edit payment status
   const handleEditPaymentStatus = (record) => {
+    if (!canEditOrder) {
+      message.error('Bạn không có quyền chỉnh sửa đơn hàng.');
+      return;
+    }
     setEditingOrder(record);
     setNewPaymentStatus(record.paymentStatus || 'pending');
     setEditPaymentModalVisible(true);
@@ -446,6 +488,10 @@ const ManageOrdersWholesale = () => {
   // Save payment status
   const handleSavePaymentStatus = async () => {
     if (!editingOrder) return;
+    if (!canEditOrder) {
+      message.error('Bạn không có quyền chỉnh sửa đơn hàng.');
+      return;
+    }
 
     try {
       setLoading(true);

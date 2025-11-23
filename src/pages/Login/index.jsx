@@ -27,6 +27,12 @@ const Login = () => {
         errorMessage = 'Email không hợp lệ!';
       } else if (error.code === 'auth/invalid-credential') {
         errorMessage = 'Email hoặc mật khẩu không đúng!';
+      } else if (error.message && error.message.includes('vô hiệu hóa')) {
+        errorMessage = error.message;
+      } else if (error.message && error.message.includes('tạm khóa')) {
+        errorMessage = error.message;
+      } else if (error.message && error.message.includes('User data not found')) {
+        errorMessage = 'Thông tin tài khoản không tồn tại trong hệ thống!';
       }
       
       message.error(errorMessage);

@@ -13,6 +13,7 @@ import {
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../../contexts/StoreContext';
+import { useAuth } from '../../contexts/AuthContext';
 import * as XLSX from 'xlsx';
 import dayjs from 'dayjs';
 
@@ -22,6 +23,25 @@ const { Search } = Input;
 const Inventory = () => {
   const navigate = useNavigate();
   const { selectedStore } = useStore();
+  const { user, isAdmin } = useAuth();
+  const userPermissions = user?.permissions || [];
+  const hasPermission = isAdmin || userPermissions.includes('warehouse.inventory.view');
+  const canImportStock = isAdmin || userPermissions.includes('warehouse.inventory.import');
+  const canExportStock = isAdmin || userPermissions.includes('warehouse.inventory.export');
+  const canAdjustStock = isAdmin || userPermissions.includes('warehouse.inventory.adjust');
+  const canViewDetail = isAdmin || userPermissions.includes('warehouse.inventory.detail');
+  const canExportReport = isAdmin || userPermissions.includes('warehouse.inventory.exportReport');
+
+  if (!hasPermission) {
+    return (
+      <div style={{ padding: '24px' }}>
+        <Card>
+          <h1>Không có quyền truy cập</h1>
+          <p>Bạn không được phép truy cập trang Kho Hàng. Vui lòng liên hệ quản trị viên để được cấp quyền.</p>
+        </Card>
+      </div>
+    );
+  }
   const [loading, setLoading] = useState(false);
   const [products, setProducts] = useState([]);
   const [filteredProducts, setFilteredProducts] = useState([]);
@@ -125,6 +145,11 @@ const Inventory = () => {
 
   // Handle adjust inventory (single or bulk) - SET stock to new value
   const handleAdjust = async () => {
+    if (!canAdjustStock) {
+      message.error('Bạn không có quyền điều chỉnh tồn kho.');
+      return;
+    }
+
     if (adjustQuantity < 0) {
       message.error('Số lượng kho không thể âm!');
       return;
@@ -183,6 +208,11 @@ const Inventory = () => {
 
   // Export Excel
   const exportExcel = () => {
+    if (!canExportReport) {
+      message.error('Bạn không có quyền xuất báo cáo Kho Hàng.');
+      return;
+    }
+
     const data = filteredProducts.map((p, i) => ({
       'STT': i + 1,
       'Sản Phẩm': p.name,
@@ -204,6 +234,18 @@ const Inventory = () => {
 
   // Handle import stock (add/subtract)
   const handleImportStock = async () => {
+    if (adjustType === 'add') {
+      if (!canImportStock) {
+        message.error('Bạn không có quyền nhập kho.');
+        return;
+      }
+    } else {
+      if (!canExportStock) {
+        message.error('Bạn không có quyền xuất kho.');
+        return;
+      }
+    }
+
     if (adjustQuantity <= 0) {
       message.error('Vui lòng nhập số lượng hợp lệ!');
       return;
@@ -331,6 +373,11 @@ const Inventory = () => {
 
   // Handle update stock (set to new value)
   const handleUpdateStock = async () => {
+    if (!canAdjustStock) {
+      message.error('Bạn không có quyền điều chỉnh tồn kho.');
+      return;
+    }
+
     if (!selectedProduct || updateQuantity < 0) {
       message.error('Vui lòng nhập số lượng hợp lệ!');
       return;
@@ -724,6 +771,10 @@ const Inventory = () => {
               key="view" 
               icon={<EyeOutlined style={{ color: '#1890ff' }} />}
               onClick={() => {
+                if (!canViewDetail) {
+                  message.error('Bạn không có quyền xem chi tiết sản phẩm kho.');
+                  return;
+                }
                 setSelectedProduct(record);
                 setDetailModalVisible(true);
               }}

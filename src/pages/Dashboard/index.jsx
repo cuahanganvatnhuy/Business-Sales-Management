@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Row, Col, Statistic, Table, Tag, Spin, Button, List, Dropdown, Menu } from 'antd';
 import { useStore } from '../../contexts/StoreContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { database } from '../../services/firebase.service';
 import { ref, onValue } from 'firebase/database';
 import { useNavigate } from 'react-router-dom';
@@ -29,6 +30,8 @@ import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from '../../utils/constants'
 const Dashboard = () => {
   const { selectedStore } = useStore();
   const navigate = useNavigate();
+  const { user, isAdmin } = useAuth();
+  const hasPermission = isAdmin || (user?.permissions || []).includes('dashboard.view');
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     totalOrders: 0,
@@ -138,6 +141,17 @@ const Dashboard = () => {
       render: (date) => new Date(date).toLocaleDateString('vi-VN')
     }
   ];
+
+  if (!hasPermission) {
+    return (
+      <div style={{ padding: '24px' }}>
+        <Card>
+          <h1>Không có quyền truy cập</h1>
+          <p>Bạn không được phép truy cập trang Dashboard. Vui lòng liên hệ quản trị viên để được cấp quyền.</p>
+        </Card>
+      </div>
+    );
+  }
 
   if (loading) {
     return (

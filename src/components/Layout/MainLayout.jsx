@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Layout, Menu, Avatar, Dropdown, Space, Radio, Button, Modal, Card, Spin } from 'antd';
 import {
   DashboardOutlined,
@@ -36,8 +36,105 @@ const MainLayout = () => {
   const location = useLocation();
   const { user, logout, isAdmin, isManager } = useAuth();
   const { selectedStore, selectStore, stores, setStores, switching } = useStore();
+  const userPermissions = user?.permissions || [];
 
-  // Load stores from Firebase
+  // Helper function để kiểm tra quyền
+  const hasPermission = (permission) => {
+    if (!permission) return true; // Không có permission yêu cầu thì cho phép
+    return isAdmin || userPermissions.includes(permission);
+  };
+
+  // Mapping route với permission cần thiết
+  const routePermissions = {
+    '/dashboard': 'dashboard.view',
+    'products-menu': 'menu.products', // Menu group "Sản Phẩm"
+    '/products/add': 'products.add',
+    '/products/manage': 'menu.products',
+    '/categories': 'menu.products',
+    '/selling-products': 'sellingProducts.view',
+    'create-orders': null, // Menu group - hiển thị nếu có ít nhất 1 child có quyền
+    '/orders/create/ecommerce': 'orders.create.ecommerce',
+    '/orders/create/retail': 'orders.create.retail',
+    '/orders/create/wholesale': 'orders.create.wholesale',
+    'manage-orders': null, // Menu group - hiển thị nếu có ít nhất 1 child có quyền
+    '/orders/manage/ecommerce': 'orders.manage.ecommerce.view',
+    '/orders/manage/retail': 'orders.manage.retail.view',
+    '/orders/manage/wholesale': 'orders.manage.wholesale.view',
+    '/orders/debt': 'orders.debt.manage.view',
+    '/orders/debt/dashboard': 'orders.debt.dashboard.view',
+    '/stores': 'stores.manage.view',
+    'finance': null, // Menu group - hiển thị nếu có ít nhất 1 child có quyền
+    '/finance/transactions': 'finance.transactions.view',
+    '/finance/overview': 'finance.profit.overview.view',
+    '/finance/ecommerce-profit': 'finance.profit.ecommerce.view',
+    '/finance/retail-profit': 'finance.profit.retail.view',
+    '/finance/wholesale-profit': 'finance.profit.wholesale.view',
+    '/reports': 'reports.view',
+    'warehouse': null, // Menu group - hiển thị nếu có ít nhất 1 child có quyền
+    '/warehouse/inventory': 'warehouse.inventory.view',
+    '/warehouse/transactions': 'warehouse.transactions.view',
+    '/warehouse/usage-report': 'warehouse.usageReport.view',
+    '/warehouse/order-report': 'warehouse.orderReport.view',
+    '/shipping-cost': 'shippingcost.view',
+    'invoices': null, // Menu group - hiển thị nếu có ít nhất 1 child có quyền
+    '/invoices/global': 'invoices.global.view',
+    '/invoices/store': 'invoices.store.view',
+    '/invoices/payment': 'invoices.payment.view',
+    '/hr/staff': 'hr.staff.view',
+    '/hr/roles': 'hr.roles.view',
+  };
+
+  // Hàm lọc menu items dựa trên permissions
+  const filterMenuItems = (items) => {
+    return items.map(item => {
+      // Nếu có children, lọc children trước
+      if (item.children && Array.isArray(item.children)) {
+        const filteredChildren = filterMenuItems(item.children);
+        // Nếu sau khi lọc không còn children nào, ẩn menu cha
+        if (filteredChildren.length === 0) {
+          return null;
+        }
+        
+        // Kiểm tra permission cho menu group (nếu có)
+        const route = item.key;
+        const requiredPermission = routePermissions[route];
+        
+        // Nếu menu group có permission requirement và user không có quyền, ẩn nó
+        if (requiredPermission !== null && requiredPermission !== undefined && !hasPermission(requiredPermission)) {
+          return null;
+        }
+        
+        // Trả về item với children đã được lọc
+        return {
+          ...item,
+          children: filteredChildren
+        };
+      }
+      
+      // Kiểm tra permission cho route (không có children)
+      const route = item.key;
+      const requiredPermission = routePermissions[route];
+      
+      // Nếu route không có trong mapping, cho phép hiển thị (route không có permission check)
+      if (requiredPermission === undefined) {
+        return item;
+      }
+      
+      // Nếu permission là null (menu group), cho phép hiển thị
+      if (requiredPermission === null) {
+        return item;
+      }
+      
+      // Kiểm tra permission - nếu không có quyền, trả về null
+      if (!hasPermission(requiredPermission)) {
+        return null;
+      }
+      
+      return item;
+    }).filter(item => item !== null); // Loại bỏ các item null
+  };
+
+  // Load stores from Firebase - Load tất cả stores, filtering sẽ được làm trong useMemo
   useEffect(() => {
     const storesRef = ref(database, 'stores');
     const unsubscribe = onValue(storesRef, (snapshot) => {
@@ -257,11 +354,26 @@ const MainLayout = () => {
   if (isAdmin) {
     // Insert before Settings
     menuItems.splice(menuItems.length - 1, 0, {
-      key: '/users',
+      key: 'hr-management',
       icon: <TeamOutlined />,
-      label: 'Quản Lý Nhân sự',
+      label: 'Quản Lý Nhân sự',
+      children: [
+        {
+          key: '/hr/staff',
+          icon: <UserOutlined />,
+          label: 'Tài khoản nhân sự',
+        },
+        {
+          key: '/hr/roles',
+          icon: <SettingOutlined />,
+          label: 'Cài đặt phân quyền',
+        }
+      ]
     });
   }
+
+  // Lọc menu items dựa trên permissions
+  const filteredMenuItems = filterMenuItems(menuItems);
 
   // Get selected store name
   const getSelectedStoreName = () => {
@@ -269,6 +381,43 @@ const MainLayout = () => {
   };
 
   // Store dropdown menu content
+  // Tính toán stores được phép hiển thị dựa trên allowedStoreIds
+  const allowedStores = useMemo(() => {
+    if (isAdmin) {
+      return stores; // Admin thấy tất cả
+    }
+    
+    const allowedStoreIds = user?.allowedStoreIds;
+    
+    // Kiểm tra nếu là 'all' (string) hoặc ['all'] (array chứa 'all')
+    const isAllStores = !allowedStoreIds || 
+                       allowedStoreIds === 'all' || 
+                       (Array.isArray(allowedStoreIds) && allowedStoreIds.includes('all'));
+    
+    if (isAllStores) {
+      return stores; // Không có giới hạn, hiển thị tất cả
+    }
+    
+    // Lọc stores dựa trên allowedStoreIds
+    if (Array.isArray(allowedStoreIds)) {
+      return stores.filter(store => allowedStoreIds.includes(store.id));
+    } else if (typeof allowedStoreIds === 'string') {
+      return stores.filter(store => store.id === allowedStoreIds);
+    }
+    
+    return stores;
+  }, [stores, isAdmin, user?.allowedStoreIds]);
+
+  // Kiểm tra có quyền xem "Toàn Bộ Cửa Hàng" không
+  const canViewAllStores = useMemo(() => {
+    if (isAdmin) return true;
+    
+    const allowedStoreIds = user?.allowedStoreIds;
+    return !allowedStoreIds || 
+           allowedStoreIds === 'all' || 
+           (Array.isArray(allowedStoreIds) && allowedStoreIds.includes('all'));
+  }, [isAdmin, user?.allowedStoreIds]);
+
   const storeDropdownContent = (
     <div style={{
       background: 'linear-gradient(135deg, #007A33 0%, #005A25 100%)',
@@ -293,13 +442,13 @@ const MainLayout = () => {
       </div>
       
       <Radio.Group 
-        value={selectedStore?.id || 'all'} 
+        value={selectedStore?.id || (canViewAllStores ? 'all' : allowedStores[0]?.id)} 
         onChange={(e) => {
           if (e.target.value === 'all') {
             // Select "All Stores"
             selectStore({ id: 'all', name: 'Toàn Bộ Cửa Hàng' }, true);
           } else {
-            const store = stores.find(s => s.id === e.target.value);
+            const store = allowedStores.find(s => s.id === e.target.value);
             if (store) {
               selectStore(store, true); // Show notification when switching from dropdown
             }
@@ -310,27 +459,29 @@ const MainLayout = () => {
         disabled={switching}
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          {/* Option: Toàn Bộ Cửa Hàng */}
-          <div
-            style={{
-              background: 'rgba(255,255,255,0.1)',
-              padding: '12px',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              transition: 'all 0.3s',
-              border: selectedStore?.id === 'all' ? '2px solid #fbbf24' : '2px solid transparent'
-            }}
-          >
-            <Radio value="all" style={{ width: '100%' }}>
-              <div style={{ color: 'white' }}>
-                <div style={{ fontWeight: 600, fontSize: '14px' }}>🏪 Toàn Bộ Cửa Hàng</div>
-                <div style={{ fontSize: '12px', opacity: 0.8 }}>Xem tất cả dữ liệu</div>
-              </div>
-            </Radio>
-          </div>
+          {/* Option: Toàn Bộ Cửa Hàng - chỉ hiển thị nếu có quyền */}
+          {canViewAllStores && (
+            <div
+              style={{
+                background: 'rgba(255,255,255,0.1)',
+                padding: '12px',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                transition: 'all 0.3s',
+                border: selectedStore?.id === 'all' ? '2px solid #fbbf24' : '2px solid transparent'
+              }}
+            >
+              <Radio value="all" style={{ width: '100%' }}>
+                <div style={{ color: 'white' }}>
+                  <div style={{ fontWeight: 600, fontSize: '14px' }}>🏪 Toàn Bộ Cửa Hàng</div>
+                  <div style={{ fontSize: '12px', opacity: 0.8 }}>Xem tất cả dữ liệu</div>
+                </div>
+              </Radio>
+            </div>
+          )}
 
-          {/* Individual Stores */}
-          {stores.map(store => (
+          {/* Individual Stores - chỉ hiển thị stores được phép */}
+          {allowedStores.map(store => (
             <div
               key={store.id}
               style={{
@@ -389,10 +540,10 @@ const MainLayout = () => {
       onClick: () => navigate('/change-password'),
     },
     isAdmin && {
-      key: 'users',
+      key: 'hr-staff-and-roles',
       icon: <TeamOutlined />,
-      label: 'Quản lý tài khoản',
-      onClick: () => navigate('/users'),
+      label: 'Quản lý nhân sự & quyền',
+      onClick: () => navigate('/hr/staff'),
     },
     {
       type: 'divider',
@@ -450,7 +601,7 @@ const MainLayout = () => {
           theme="dark"
           mode="inline"
           selectedKeys={[location.pathname]}
-          items={menuItems}
+          items={filteredMenuItems}
           onClick={handleMenuClick}
           style={{ borderRight: 0, flex: 1, marginBottom: 0 }}
         />
@@ -554,18 +705,53 @@ const MainLayout = () => {
           </p>
 
           <Radio.Group 
-            value={selectedStore?.id}
+            value={selectedStore?.id || (canViewAllStores ? 'all' : allowedStores[0]?.id)}
             onChange={(e) => {
-              const store = stores.find(s => s.id === e.target.value);
-              if (store) {
-                selectStore(store, false); // Don't show notification in initial modal
+              if (e.target.value === 'all') {
+                selectStore({ id: 'all', name: 'Toàn Bộ Cửa Hàng' }, false);
                 setStoreModalVisible(false);
+              } else {
+                const store = allowedStores.find(s => s.id === e.target.value);
+                if (store) {
+                  selectStore(store, false); // Don't show notification in initial modal
+                  setStoreModalVisible(false);
+                }
               }
             }}
             style={{ width: '100%' }}
           >
             <Space direction="vertical" style={{ width: '100%' }} size={12}>
-              {stores.map(store => (
+              {/* Option: Toàn Bộ Cửa Hàng - chỉ hiển thị nếu có quyền */}
+              {canViewAllStores && (
+                <Card
+                  hoverable
+                  style={{
+                    border: selectedStore?.id === 'all' 
+                      ? '2px solid #007A33' 
+                      : '1px solid #d9d9d9',
+                    background: selectedStore?.id === 'all' 
+                      ? '#f6ffed' 
+                      : 'white'
+                  }}
+                >
+                  <Radio value="all" style={{ width: '100%' }}>
+                    <div>
+                      <div style={{ 
+                        fontWeight: 600, 
+                        fontSize: 16, 
+                        color: '#007A33',
+                        marginBottom: 4
+                      }}>
+                        🏪 Toàn Bộ Cửa Hàng
+                      </div>
+                      <div style={{ fontSize: 13, color: '#666' }}>
+                        Xem tất cả dữ liệu
+                      </div>
+                    </div>
+                  </Radio>
+                </Card>
+              )}
+              {allowedStores.map(store => (
                 <Card
                   key={store.id}
                   hoverable
@@ -599,7 +785,7 @@ const MainLayout = () => {
             </Space>
           </Radio.Group>
 
-          {stores.length === 0 && (
+          {allowedStores.length === 0 && (
             <div style={{ textAlign: 'center', padding: '40px 0' }}>
               <ShopOutlined style={{ fontSize: 48, color: '#d9d9d9', marginBottom: 16 }} />
               <p style={{ color: '#999' }}>Chưa có cửa hàng nào</p>

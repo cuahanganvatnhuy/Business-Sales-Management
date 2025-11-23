@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { database } from '../../services/firebase.service';
 import { ref, onValue } from 'firebase/database';
 import { useStore } from '../../contexts/StoreContext';
+import { useAuth } from '../../contexts/AuthContext';
 import {
   Card, Table, DatePicker, Select, Button, Space, Row, Col, Statistic, Input
 } from 'antd';
@@ -17,6 +18,21 @@ const { Option } = Select;
 
 const UsageReport = () => {
   const { selectedStore } = useStore();
+  const { user, isAdmin } = useAuth();
+  const userPermissions = user?.permissions || [];
+  const hasPermission = isAdmin || userPermissions.includes('warehouse.usageReport.view');
+  const canExportReport = isAdmin || userPermissions.includes('warehouse.usageReport.export');
+
+  if (!hasPermission) {
+    return (
+      <div style={{ padding: '24px' }}>
+        <Card>
+          <h1>Không có quyền truy cập</h1>
+          <p>Bạn không được phép truy cập trang Báo Cáo Sử Dụng. Vui lòng liên hệ quản trị viên để được cấp quyền.</p>
+        </Card>
+      </div>
+    );
+  }
   const [loading, setLoading] = useState(false);
   const [transactions, setTransactions] = useState([]);
   const [products, setProducts] = useState([]);
@@ -176,6 +192,10 @@ const UsageReport = () => {
 
   // Export Excel
   const exportExcel = () => {
+    if (!canExportReport) {
+      message.error('Bạn không có quyền xuất báo cáo Báo Cáo Sử Dụng.');
+      return;
+    }
     const data = reportData.map((r, i) => ({
       'STT': i + 1,
       'Sản Phẩm': r.productName,

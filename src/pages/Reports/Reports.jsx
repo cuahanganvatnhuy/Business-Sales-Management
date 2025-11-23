@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { database } from '../../services/firebase.service';
 import { ref, onValue } from 'firebase/database';
 import { useStore } from '../../contexts/StoreContext';
+import { useAuth } from '../../contexts/AuthContext';
 import {
   Card, Row, Col, Select, DatePicker, Button, Table, Statistic,
   Tag, Space, Radio, message
@@ -19,6 +20,20 @@ const { RangePicker } = DatePicker;
 const { Option } = Select;
 
 const Reports = () => {
+  const { user, isAdmin } = useAuth();
+  const hasPermission = isAdmin || (user?.permissions || []).includes('reports.view');
+
+  if (!hasPermission) {
+    return (
+      <div style={{ padding: '24px' }}>
+        <Card>
+          <h1>Không có quyền truy cập</h1>
+          <p>Bạn không được phép truy cập trang Báo Cáo. Vui lòng liên hệ quản trị viên để được cấp quyền.</p>
+        </Card>
+      </div>
+    );
+  }
+
   const { stores } = useStore();
   const [reportType, setReportType] = useState('global');
   const [selectedStoreId, setSelectedStoreId] = useState('');

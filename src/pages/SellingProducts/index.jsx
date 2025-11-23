@@ -17,12 +17,22 @@ import { database } from '../../services/firebase.service';
 import { ref, onValue, push, set, update, remove } from 'firebase/database';
 import { formatCurrency } from '../../utils/format';
 import * as XLSX from 'xlsx';
+import { useAuth } from '../../contexts/AuthContext';
 import './SellingProducts.css';
 
 const { TextArea } = Input;
 const { Option } = Select;
 
 const SellingProducts = () => {
+  const { user, isAdmin } = useAuth();
+  const userPermissions = user?.permissions || [];
+  const canViewSellingProducts = isAdmin || userPermissions.includes('sellingProducts.view');
+  const canEditSellingProducts = isAdmin || userPermissions.includes('sellingProducts.manage.edit');
+  const canDeleteSellingSingle = isAdmin || userPermissions.includes('sellingProducts.manage.delete.single');
+  const canDeleteSellingBulk = isAdmin || userPermissions.includes('sellingProducts.manage.delete.bulk');
+  const canSyncAll = isAdmin || userPermissions.includes('sellingProducts.manage.sync.all');
+  const canSyncSelect = isAdmin || userPermissions.includes('sellingProducts.manage.sync.select');
+  const canActivate = isAdmin || userPermissions.includes('sellingProducts.manage.activate');
   const [loading, setLoading] = useState(false);
   const [products, setProducts] = useState([]); // Sản phẩm gốc
   const [sellingProducts, setSellingProducts] = useState([]); // Sản phẩm đang bán
@@ -120,6 +130,10 @@ const SellingProducts = () => {
 
   // Handle sync all products
   const handleSyncAll = () => {
+    if (!canSyncAll) {
+      message.error('Bạn không có quyền đồng bộ toàn bộ sản phẩm bán.');
+      return;
+    }
     // Tính số sản phẩm có thể đồng bộ
     const availableProducts = products.filter(p => 
       !sellingProducts.some(sp => sp.productId === p.id)
@@ -211,6 +225,10 @@ const SellingProducts = () => {
 
   // Handle select products
   const handleSelectProducts = () => {
+    if (!canSyncSelect) {
+      message.error('Bạn không có quyền chọn sản phẩm để đồng bộ.');
+      return;
+    }
     const availableProducts = products.filter(p => 
       !sellingProducts.some(sp => sp.productId === p.id)
     );
@@ -225,6 +243,10 @@ const SellingProducts = () => {
 
   // Handle create selected products
   const handleCreateSelected = async () => {
+    if (!canSyncSelect) {
+      message.error('Bạn không có quyền chọn sản phẩm để đồng bộ.');
+      return;
+    }
     if (selectedProductsForAdd.length === 0) {
       message.warning('Vui lòng chọn ít nhất 1 sản phẩm!');
       return;
@@ -267,6 +289,10 @@ const SellingProducts = () => {
 
   // Handle edit price
   const handleEditPrice = (record) => {
+    if (!canEditSellingProducts) {
+      message.error('Bạn không có quyền chỉnh sửa sản phẩm bán.');
+      return;
+    }
     setEditingProduct(record);
     form.setFieldsValue({
       sellingPrice: record.sellingPrice,
@@ -279,6 +305,10 @@ const SellingProducts = () => {
   // Handle save price
   const handleSavePrice = async (values) => {
     try {
+      if (!canEditSellingProducts) {
+        message.error('Bạn không có quyền chỉnh sửa sản phẩm bán.');
+        return;
+      }
       const productRef = ref(database, `sellingProducts/${editingProduct.id}`);
       await update(productRef, {
         sellingPrice: values.sellingPrice,
@@ -299,6 +329,10 @@ const SellingProducts = () => {
 
   // Handle delete single product
   const handleDelete = (record) => {
+    if (!canDeleteSellingSingle) {
+      message.error('Bạn không có quyền xóa sản phẩm bán.');
+      return;
+    }
     console.log('🗑️ Opening delete modal for single product:', record.productName);
     setDeletingProduct(record);
     setDeleteSingleModalVisible(true);
@@ -310,6 +344,10 @@ const SellingProducts = () => {
     setLoading(true);
     
     try {
+      if (!canDeleteSellingSingle) {
+        message.error('Bạn không có quyền xóa sản phẩm bán.');
+        return;
+      }
       console.log('🗑️ Deleting product:', deletingProduct.id);
       const productRef = ref(database, `sellingProducts/${deletingProduct.id}`);
       await remove(productRef);
@@ -331,6 +369,11 @@ const SellingProducts = () => {
       return;
     }
 
+    if (!canDeleteSellingBulk) {
+      message.error('Bạn không có quyền xóa nhiều sản phẩm bán.');
+      return;
+    }
+
     console.log('🗑️ Opening delete modal for:', selectedRows.length, 'products');
     setDeleteModalVisible(true);
   };
@@ -341,6 +384,10 @@ const SellingProducts = () => {
     setLoading(true);
     
     try {
+      if (!canDeleteSellingBulk) {
+        message.error('Bạn không có quyền xóa nhiều sản phẩm bán.');
+        return;
+      }
       console.log('🗑️ Deleting products:', selectedRows);
       let deletedCount = 0;
       
@@ -374,6 +421,11 @@ const SellingProducts = () => {
   const handleBulkUpdateStatus = async (newStatus) => {
     if (selectedRows.length === 0) {
       message.warning('Vui lòng chọn sản phẩm!');
+      return;
+    }
+
+    if (!canActivate) {
+      message.error('Bạn không có quyền kích hoạt / tạm dừng sản phẩm bán.');
       return;
     }
 
@@ -415,12 +467,20 @@ const SellingProducts = () => {
 
   // Handle inline edit price
   const handleInlineEdit = (record) => {
+    if (!canEditSellingProducts) {
+      message.error('Bạn không có quyền chỉnh sửa sản phẩm bán.');
+      return;
+    }
     setEditingKey(record.id);
     setEditingPrice(record.sellingPrice || 0);
   };
 
   // Save inline edit price
   const handleSaveInlinePrice = async (record) => {
+    if (!canEditSellingProducts) {
+      message.error('Bạn không có quyền chỉnh sửa sản phẩm bán.');
+      return;
+    }
     if (editingPrice === record.sellingPrice) {
       setEditingKey('');
       return;
@@ -711,6 +771,17 @@ const SellingProducts = () => {
       )
     }
   ];
+
+  if (!canViewSellingProducts) {
+    return (
+      <div style={{ padding: '24px' }}>
+        <Card>
+          <h1>Không có quyền truy cập</h1>
+          <p>Bạn không được phép truy cập trang Quản Lý Sản Phẩm Bán. Vui lòng liên hệ quản trị viên để được cấp quyền.</p>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="selling-products-page">

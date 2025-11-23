@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { database } from '../../services/firebase.service';
+import { useAuth } from '../../contexts/AuthContext';
 import { ref, onValue, push, set, update, remove } from 'firebase/database';
 import {
   Card,
@@ -31,6 +32,23 @@ import {
 const { Option } = Select;
 
 const ManageStores = () => {
+  const { user, isAdmin } = useAuth();
+  const userPermissions = user?.permissions || [];
+  const hasPermission = isAdmin || userPermissions.includes('stores.manage.view');
+  const canAddStore = isAdmin || userPermissions.includes('stores.manage.add');
+  const canEditStore = isAdmin || userPermissions.includes('stores.manage.edit');
+  const canDeleteStore = isAdmin || userPermissions.includes('stores.manage.delete');
+
+  if (!hasPermission) {
+    return (
+      <div style={{ padding: '24px' }}>
+        <Card>
+          <h1>Không có quyền truy cập</h1>
+          <p>Bạn không được phép truy cập trang Quản Lý Cửa Hàng. Vui lòng liên hệ quản trị viên để được cấp quyền.</p>
+        </Card>
+      </div>
+    );
+  }
   const [stores, setStores] = useState([]);
   const [filteredStores, setFilteredStores] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -126,10 +144,19 @@ const ManageStores = () => {
 
   // Open add/edit modal
   const handleOpenModal = (store = null) => {
-    setEditingStore(store);
     if (store) {
+      if (!canEditStore) {
+        message.error('Bạn không có quyền chỉnh sửa cửa hàng.');
+        return;
+      }
+      setEditingStore(store);
       form.setFieldsValue(store);
     } else {
+      if (!canAddStore) {
+        message.error('Bạn không có quyền thêm cửa hàng.');
+        return;
+      }
+      setEditingStore(null);
       form.resetFields();
     }
     setModalVisible(true);
@@ -137,6 +164,18 @@ const ManageStores = () => {
 
   // Save store (add or edit)
   const handleSaveStore = async () => {
+    if (editingStore) {
+      if (!canEditStore) {
+        message.error('Bạn không có quyền chỉnh sửa cửa hàng.');
+        return;
+      }
+    } else {
+      if (!canAddStore) {
+        message.error('Bạn không có quyền thêm cửa hàng.');
+        return;
+      }
+    }
+
     try {
       const values = await form.validateFields();
       setLoading(true);
@@ -174,6 +213,11 @@ const ManageStores = () => {
 
   // Delete store
   const handleDeleteStore = async (store) => {
+    if (!canDeleteStore) {
+      message.error('Bạn không có quyền xóa cửa hàng.');
+      return;
+    }
+
     try {
       setLoading(true);
       const storeRef = ref(database, `stores/${store.id}`);

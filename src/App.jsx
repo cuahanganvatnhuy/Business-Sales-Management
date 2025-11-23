@@ -17,6 +17,10 @@ import { Inventory, Transactions, UsageReport, OrderReport } from './pages/Wareh
 import ShippingCost from './pages/ShippingCost';
 import { GlobalInvoice, StoreInvoice, PaymentInvoice } from './pages/Invoices';
 import { FinancialTransactions, ProfitOverview, EcommerceProfit, RetailProfit, WholesaleProfit } from './pages/Finance';
+import StaffManagement from './pages/HR/StaffManagement';
+import RoleManagement from './pages/HR/RoleManagement';
+import Profile from './pages/Profile';
+import ChangePassword from './pages/ChangePassword';
 import MainLayout from './components/Layout/MainLayout';
 import './App.css';
 
@@ -103,6 +107,16 @@ function App() {
                 <Route path="retail-profit" element={<RetailProfit />} />
                 <Route path="wholesale-profit" element={<WholesaleProfit />} />
               </Route>
+
+              {/* Human Resources */}
+              <Route path="hr">
+                <Route path="staff" element={<StaffManagement />} />
+                <Route path="roles" element={<RoleManagement />} />
+              </Route>
+
+              {/* User Profile & Settings */}
+              <Route path="profile" element={<Profile />} />
+              <Route path="change-password" element={<ChangePassword />} />
             </Route>
             
             {/* Redirect mọi route không tồn tại về dashboard */}

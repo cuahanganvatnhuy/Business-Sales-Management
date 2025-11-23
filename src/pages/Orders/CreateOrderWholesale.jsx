@@ -41,6 +41,7 @@ import { formatCurrency } from '../../utils/format';
 import { printWholesaleInvoice } from '../../utils/printInvoice';
 import { validateStock, deductStock, checkStockAvailability } from '../../utils/inventoryHelpers';
 import dayjs from 'dayjs';
+import { useAuth } from '../../contexts/AuthContext';
 import './Orders.css';
 
 const { Option } = Select;
@@ -60,6 +61,8 @@ const platforms = [
 const CreateOrderWholesale = () => {
   const navigate = useNavigate();
   const { selectedStore } = useStore();
+  const { user, isAdmin } = useAuth();
+  const hasPermission = isAdmin || (user?.permissions || []).includes('orders.create.wholesale');
   const [mainForm] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [sellingProducts, setSellingProducts] = useState([]);
@@ -644,6 +647,17 @@ const CreateOrderWholesale = () => {
   };
 
   const { subtotal, totalProfit, finalAmount, remaining } = calculateTotals();
+
+  if (!hasPermission) {
+    return (
+      <div style={{ padding: '24px' }}>
+        <Card>
+          <h1>Không có quyền truy cập</h1>
+          <p>Bạn không được phép truy cập trang Tạo Đơn Hàng Bán Sỉ. Vui lòng liên hệ quản trị viên để được cấp quyền.</p>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div style={{ padding: '24px' }}>

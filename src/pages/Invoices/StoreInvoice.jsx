@@ -29,6 +29,7 @@ import {
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import 'dayjs/locale/vi';
+import { useAuth } from '../../contexts/AuthContext';
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -37,6 +38,20 @@ const { Option } = Select;
 dayjs.locale('vi');
 
 const StoreInvoice = () => {
+  const { user, isAdmin } = useAuth();
+  const hasPermission = isAdmin || (user?.permissions || []).includes('invoices.store.view');
+
+  if (!hasPermission) {
+    return (
+      <div style={{ padding: '24px' }}>
+        <Card>
+          <h1>Không có quyền truy cập</h1>
+          <p>Bạn không được phép truy cập trang Hóa Đơn Từng Cửa Hàng. Vui lòng liên hệ quản trị viên để được cấp quyền.</p>
+        </Card>
+      </div>
+    );
+  }
+
   const [loading, setLoading] = useState(false);
   const [dateRange, setDateRange] = useState([dayjs().subtract(30, 'days'), dayjs()]);
   const [selectedStore, setSelectedStore] = useState('');

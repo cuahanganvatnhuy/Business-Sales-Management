@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { database } from '../../services/firebase.service';
 import { ref, onValue, remove } from 'firebase/database';
 import { useStore } from '../../contexts/StoreContext';
+import { useAuth } from '../../contexts/AuthContext';
 import {
   Card, Table, Tag, DatePicker, Select, Button, Space, Row, Col, Tabs, Statistic, Input, Tooltip, Modal, Dropdown, Menu, message
 } from 'antd';
@@ -18,6 +19,26 @@ const { Option } = Select;
 const { Search } = Input;
 
 const Transactions = () => {
+  const { user, isAdmin } = useAuth();
+  const userPermissions = user?.permissions || [];
+  const hasPermission = isAdmin || userPermissions.includes('warehouse.transactions.view');
+  const canViewDetail = isAdmin || userPermissions.includes('warehouse.transactions.detail');
+  const canDeleteSingle = isAdmin || userPermissions.includes('warehouse.transactions.delete.single');
+  const canDeleteBulk = isAdmin || userPermissions.includes('warehouse.transactions.delete.bulk');
+  const canExportReport = isAdmin || userPermissions.includes('warehouse.transactions.export');
+  const canPrintReceipt = isAdmin || userPermissions.includes('warehouse.transactions.print');
+
+  if (!hasPermission) {
+    return (
+      <div style={{ padding: '24px' }}>
+        <Card>
+          <h1>Không có quyền truy cập</h1>
+          <p>Bạn không được phép truy cập trang Quản Lý Giao Dịch Kho. Vui lòng liên hệ quản trị viên để được cấp quyền.</p>
+        </Card>
+      </div>
+    );
+  }
+
   const { selectedStore } = useStore();
   const [loading, setLoading] = useState(false);
   const [transactions, setTransactions] = useState([]);
@@ -165,6 +186,10 @@ const Transactions = () => {
 
   // Export Excel
   const exportExcel = () => {
+    if (!canExportReport) {
+      message.error('Bạn không có quyền xuất báo cáo giao dịch kho.');
+      return;
+    }
     const data = filteredTransactions.map((t, i) => ({
       'STT': i + 1,
       'Ngày': dayjs(t.createdAt).format('DD/MM/YYYY HH:mm'),
@@ -186,6 +211,10 @@ const Transactions = () => {
 
   // Print receipt
   const printReceipt = (transaction) => {
+    if (!canPrintReceipt) {
+      message.error('Bạn không có quyền in phiếu giao dịch kho.');
+      return;
+    }
     const typeText = transaction.type === 'import' ? 'NHẬP KHO' : transaction.type === 'export' ? 'XUẤT KHO' : 'ĐIỀU CHỈNH KHO';
     const typePrefix = transaction.type === 'import' ? 'NK' : transaction.type === 'export' ? 'XK' : 'DC';
     const typeColor = transaction.type === 'import' ? '#52c41a' : transaction.type === 'export' ? '#f5222d' : '#1890ff';
@@ -550,6 +579,10 @@ const Transactions = () => {
               key="view"
               icon={<EyeOutlined style={{ color: '#1890ff' }} />}
               onClick={() => {
+                if (!canViewDetail) {
+                  message.error('Bạn không có quyền xem chi tiết giao dịch kho.');
+                  return;
+                }
                 setSelectedTransaction(record);
                 setDetailModalVisible(true);
               }}
@@ -569,6 +602,10 @@ const Transactions = () => {
               icon={<DeleteOutlined style={{ color: '#ff4d4f' }} />}
               danger
               onClick={() => {
+                if (!canDeleteSingle) {
+                  message.error('Bạn không có quyền xóa giao dịch kho.');
+                  return;
+                }
                 setDeletingTransaction(record);
                 setDeleteModalVisible(true);
               }}
@@ -785,7 +822,13 @@ const Transactions = () => {
               type="primary"
               danger
               icon={<DeleteOutlined />}
-              onClick={() => setBulkDeleteModalVisible(true)}
+              onClick={() => {
+                if (!canDeleteBulk) {
+                  message.error('Bạn không có quyền xóa nhiều giao dịch kho.');
+                  return;
+                }
+                setBulkDeleteModalVisible(true);
+              }}
             >
               Xóa đã chọn ({selectedRowKeys.length})
             </Button>

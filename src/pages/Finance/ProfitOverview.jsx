@@ -24,6 +24,7 @@ import {
 import { Line, Column, Pie } from '@ant-design/plots';
 import dayjs from 'dayjs';
 import { database } from '../../services/firebase.service';
+import { useAuth } from '../../contexts/AuthContext';
 import { ref, onValue } from 'firebase/database';
 import * as XLSX from 'xlsx';
 
@@ -32,6 +33,20 @@ const { Option } = Select;
 const { Title, Text } = Typography;
 
 const ProfitOverview = () => {
+  const { user, isAdmin } = useAuth();
+  const hasPermission = isAdmin || (user?.permissions || []).includes('finance.profit.overview.view');
+
+  if (!hasPermission) {
+    return (
+      <div style={{ padding: '24px' }}>
+        <Card>
+          <h1>Không có quyền truy cập</h1>
+          <p>Bạn không được phép truy cập trang Tổng Quan Lợi Nhuận. Vui lòng liên hệ quản trị viên để được cấp quyền.</p>
+        </Card>
+      </div>
+    );
+  }
+
   const [loading, setLoading] = useState(false);
   const [dateRange, setDateRange] = useState([
     dayjs().subtract(30, 'days'),

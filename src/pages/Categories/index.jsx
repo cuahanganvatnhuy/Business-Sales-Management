@@ -12,6 +12,7 @@ import {
 } from '@ant-design/icons';
 import { database } from '../../services/firebase.service';
 import { ref, onValue, push, set, update, remove } from 'firebase/database';
+import { useAuth } from '../../contexts/AuthContext';
 import './Categories.css';
 
 const { Search } = Input;
@@ -36,6 +37,12 @@ const iconSuggestions = [
 
 const Categories = () => {
   const [form] = Form.useForm();
+  const { user, isAdmin } = useAuth();
+  const userPermissions = user?.permissions || [];
+  const canEditCategory = isAdmin || userPermissions.includes('categories.manage.edit');
+  const canDeleteCategorySingle = isAdmin || userPermissions.includes('categories.manage.delete.single');
+  const canDeleteCategoryBulk = isAdmin || userPermissions.includes('categories.manage.delete.bulk');
+  const hasPermission = canEditCategory || canDeleteCategorySingle || canDeleteCategoryBulk;
   
   const [categories, setCategories] = useState([]);
   const [filteredCategories, setFilteredCategories] = useState([]);
@@ -102,6 +109,10 @@ const Categories = () => {
 
   // Open edit modal
   const handleEdit = (category) => {
+    if (!canEditCategory) {
+      message.error('Bạn không có quyền chỉnh sửa danh mục.');
+      return;
+    }
     setEditingCategory(category);
     form.setFieldsValue({
       name: category.name,
@@ -128,6 +139,10 @@ const Categories = () => {
       };
 
       if (editingCategory) {
+        if (!canEditCategory) {
+          message.error('Bạn không có quyền chỉnh sửa danh mục.');
+          return;
+        }
         // Update
         const categoryRef = ref(database, `categories/${editingCategory.id}`);
         await update(categoryRef, categoryData);
@@ -153,6 +168,10 @@ const Categories = () => {
 
   // Delete category
   const handleDelete = (category) => {
+    if (!canDeleteCategorySingle) {
+      message.error('Bạn không có quyền xóa danh mục.');
+      return;
+    }
     setDeletingCategory(category);
     setDeleteModalVisible(true);
   };
@@ -160,6 +179,10 @@ const Categories = () => {
   // Confirm delete
   const handleConfirmDelete = async () => {
     try {
+      if (!canDeleteCategorySingle) {
+        message.error('Bạn không có quyền xóa danh mục.');
+        return;
+      }
       const categoryRef = ref(database, `categories/${deletingCategory.id}`);
       await remove(categoryRef);
       
@@ -189,6 +212,17 @@ const Categories = () => {
     };
     return iconMap[iconName] || <TagsOutlined />;
   };
+
+  if (!hasPermission) {
+    return (
+      <div style={{ padding: '24px' }}>
+        <Card>
+          <h1>Không có quyền truy cập</h1>
+          <p>Bạn không được phép truy cập trang Danh Mục Sản Phẩm. Vui lòng liên hệ quản trị viên để được cấp quyền.</p>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="categories-page">

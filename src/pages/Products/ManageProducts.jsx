@@ -15,6 +15,7 @@ import { database } from '../../services/firebase.service';
 import { ref, onValue, update, remove, get } from 'firebase/database';
 import { formatCurrency } from '../../utils/format';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 import './Products.css';
 
 const { Search } = Input;
@@ -24,6 +25,12 @@ const { TextArea } = Form.Item;
 const ManageProducts = () => {
   const navigate = useNavigate();
   const [form] = Form.useForm();
+  const { user, isAdmin } = useAuth();
+  const userPermissions = user?.permissions || [];
+  const canEditProduct = isAdmin || userPermissions.includes('products.manage.edit');
+  const canDeleteSingle = isAdmin || userPermissions.includes('products.manage.delete.single');
+  const canDeleteBulk = isAdmin || userPermissions.includes('products.manage.delete.bulk');
+  const hasPermission = canEditProduct || canDeleteSingle || canDeleteBulk;
   
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -134,6 +141,10 @@ const ManageProducts = () => {
 
   // Edit product
   const handleEdit = (product) => {
+    if (!canEditProduct) {
+      message.error('Bạn không có quyền chỉnh sửa sản phẩm.');
+      return;
+    }
     setEditingProduct(product);
     form.setFieldsValue({
       name: product.name,
@@ -152,6 +163,10 @@ const ManageProducts = () => {
   // Save edit
   const handleSaveEdit = async () => {
     try {
+      if (!canEditProduct) {
+        message.error('Bạn không có quyền chỉnh sửa sản phẩm.');
+        return;
+      }
       const values = await form.validateFields();
       
       const productRef = ref(database, `products/${editingProduct.id}`);
@@ -299,6 +314,10 @@ const ManageProducts = () => {
             title="Xác nhận xóa"
             description={`Bạn có chắc muốn xóa "${record.name}"?`}
             onConfirm={async () => {
+              if (!canDeleteSingle) {
+                message.error('Bạn không có quyền xóa sản phẩm.');
+                return;
+              }
               try {
                 // Delete product
                 const productRef = ref(database, `products/${record.id}`);
@@ -341,6 +360,17 @@ const ManageProducts = () => {
     }
   ];
 
+  if (!hasPermission) {
+    return (
+      <div style={{ padding: '24px' }}>
+        <Card>
+          <h1>Không có quyền truy cập</h1>
+          <p>Bạn không được phép truy cập trang Quản Lý Sản Phẩm. Vui lòng liên hệ quản trị viên để được cấp quyền.</p>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="manage-products-page">
       {/* Page Header */}
@@ -356,6 +386,10 @@ const ManageProducts = () => {
               title="Xác nhận xóa hàng loạt"
               description={`Bạn có chắc muốn xóa ${selectedRowKeys.length} sản phẩm đã chọn?`}
               onConfirm={async () => {
+                if (!canDeleteBulk) {
+                  message.error('Bạn không có quyền xóa nhiều sản phẩm.');
+                  return;
+                }
                 try {
                   console.log('🗑️ Bulk deleting:', selectedRowKeys);
                   

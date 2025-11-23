@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { database } from '../../services/firebase.service';
 import { useStore } from '../../contexts/StoreContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { ref, onValue, remove } from 'firebase/database';
 import {
   Card,
@@ -45,7 +46,27 @@ const { Option } = Select;
 const ManageOrdersRetail = () => {
   const navigate = useNavigate();
   const { selectedStore, stores } = useStore();
-  
+  const { user, isAdmin } = useAuth();
+  const userPermissions = user?.permissions || [];
+  const hasPermission = isAdmin || userPermissions.includes('orders.manage.retail.view');
+  const canViewDetail = isAdmin || userPermissions.includes('orders.manage.retail.detail');
+  const canDeleteSingle = isAdmin || userPermissions.includes('orders.manage.retail.delete.single');
+  const canDeleteBulk = isAdmin || userPermissions.includes('orders.manage.retail.delete.bulk');
+  const canDeleteAll = isAdmin || userPermissions.includes('orders.manage.retail.delete.all');
+  const canExportExcel = isAdmin || userPermissions.includes('orders.manage.retail.export');
+  const canPrint = isAdmin || userPermissions.includes('orders.manage.retail.print');
+
+  if (!hasPermission) {
+    return (
+      <div style={{ padding: '24px' }}>
+        <Card>
+          <h1>Không có quyền truy cập</h1>
+          <p>Bạn không được phép truy cập trang Quản Lý Đơn Hàng Bán Lẻ. Vui lòng liên hệ quản trị viên để được cấp quyền.</p>
+        </Card>
+      </div>
+    );
+  }
+
   // States
   const [orders, setOrders] = useState([]);
   const [filteredOrders, setFilteredOrders] = useState([]);
@@ -204,6 +225,10 @@ const ManageOrdersRetail = () => {
 
   // Delete single order
   const handleDeleteOrder = async (record) => {
+    if (!canDeleteSingle) {
+      message.error('Bạn không có quyền xóa đơn hàng.');
+      return;
+    }
     try {
       const orderRef = ref(database, `salesOrders/${record.id}`);
       await remove(orderRef);
@@ -219,6 +244,11 @@ const ManageOrdersRetail = () => {
   const handleDeleteSelected = async () => {
     if (selectedRowKeys.length === 0) {
       message.warning('Vui lòng chọn ít nhất 1 đơn hàng để xóa!');
+      return;
+    }
+
+    if (!canDeleteBulk) {
+      message.error('Bạn không có quyền xóa nhiều đơn hàng.');
       return;
     }
 
@@ -245,6 +275,11 @@ const ManageOrdersRetail = () => {
   const handleDeleteAll = async () => {
     if (filteredOrders.length === 0) {
       message.warning('Không có đơn hàng nào để xóa!');
+      return;
+    }
+
+    if (!canDeleteAll) {
+      message.error('Bạn không có quyền xóa tất cả đơn hàng.');
       return;
     }
 
@@ -417,12 +452,20 @@ const ManageOrdersRetail = () => {
 
   // View order detail
   const handleViewDetail = (record) => {
+    if (!canViewDetail) {
+      message.error('Bạn không có quyền xem chi tiết đơn hàng.');
+      return;
+    }
     setSelectedOrder(record);
     setDetailModalVisible(true);
   };
 
   // Print Invoice
   const handlePrintInvoice = (record) => {
+    if (!canPrint) {
+      message.error('Bạn không có quyền in hóa đơn.');
+      return;
+    }
     // Create print window
     const printWindow = window.open('', '_blank', 'width=800,height=600');
     
@@ -598,6 +641,11 @@ const ManageOrdersRetail = () => {
   const handlePrintSelected = () => {
     if (selectedRowKeys.length === 0) {
       message.warning('Vui lòng chọn ít nhất 1 đơn hàng để in!');
+      return;
+    }
+
+    if (!canPrint) {
+      message.error('Bạn không có quyền in hóa đơn.');
       return;
     }
 
@@ -785,6 +833,11 @@ const ManageOrdersRetail = () => {
       return;
     }
 
+    if (!canPrint) {
+      message.error('Bạn không có quyền in hóa đơn.');
+      return;
+    }
+
     const printWindow = window.open('', '_blank', 'width=800,height=600');
     
     // Generate combined HTML for all filtered orders
@@ -963,6 +1016,10 @@ const ManageOrdersRetail = () => {
 
   // Export to Excel
   const handleExportExcel = () => {
+    if (!canExportExcel) {
+      message.error('Bạn không có quyền xuất file Excel.');
+      return;
+    }
     const exportData = filteredOrders.map((order, index) => {
       // Calculate selling price (average if multiple items)
       let sellingPrice = 0;

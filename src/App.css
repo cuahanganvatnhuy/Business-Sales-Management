@@ -40,3 +40,15 @@
 .read-the-docs {
   color: #888;
 }
+
+/* Role permission detail modal: force green box + white check icon even when disabled */
+.role-permission-view-checkbox .ant-checkbox-disabled.ant-checkbox-checked .ant-checkbox-inner,
+.role-permission-view-checkbox .ant-checkbox-checked .ant-checkbox-inner {
+  background-color: #0f9d58 !important;
+  border-color: #0f9d58 !important;
+}
+
+.role-permission-view-checkbox .ant-checkbox-disabled.ant-checkbox-checked .ant-checkbox-inner::after,
+.role-permission-view-checkbox .ant-checkbox-checked .ant-checkbox-inner::after {
+  border-color: #ffffff !important;
+}

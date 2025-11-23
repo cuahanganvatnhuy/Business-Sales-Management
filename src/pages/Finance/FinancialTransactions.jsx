@@ -26,12 +26,27 @@ import {
 import * as XLSX from 'xlsx';
 import dayjs from 'dayjs';
 import { database } from '../../services/firebase.service';
+import { useAuth } from '../../contexts/AuthContext';
 import { ref, push, set, onValue, remove } from 'firebase/database';
 
 const { RangePicker } = DatePicker;
 const { Title, Text } = Typography;
 
 const FinancialTransactions = () => {
+  const { user, isAdmin } = useAuth();
+  const hasPermission = isAdmin || (user?.permissions || []).includes('finance.transactions.view');
+
+  if (!hasPermission) {
+    return (
+      <div style={{ padding: '24px' }}>
+        <Card>
+          <h1>Không có quyền truy cập</h1>
+          <p>Bạn không được phép truy cập trang Giao Dịch Tài Chính. Vui lòng liên hệ quản trị viên để được cấp quyền.</p>
+        </Card>
+      </div>
+    );
+  }
+
   const [loading, setLoading] = useState(false);
   const [transactions, setTransactions] = useState([]);
   const [dateRange, setDateRange] = useState([dayjs(), dayjs()]);

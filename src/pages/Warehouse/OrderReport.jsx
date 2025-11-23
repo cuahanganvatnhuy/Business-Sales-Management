@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { database } from '../../services/firebase.service';
 import { ref, onValue } from 'firebase/database';
+import { useAuth } from '../../contexts/AuthContext';
 import {
   Card, Table, DatePicker, Select, Button, Space, Row, Col, Statistic, Radio, Modal, Tag, message
 } from 'antd';
@@ -14,6 +15,22 @@ const { RangePicker } = DatePicker;
 const { Option } = Select;
 
 const OrderReport = () => {
+  const { user, isAdmin } = useAuth();
+  const userPermissions = user?.permissions || [];
+  const hasPermission = isAdmin || userPermissions.includes('warehouse.orderReport.view');
+  const canExportReport = isAdmin || userPermissions.includes('warehouse.orderReport.export');
+
+  if (!hasPermission) {
+    return (
+      <div style={{ padding: '24px' }}>
+        <Card>
+          <h1>Không có quyền truy cập</h1>
+          <p>Bạn không được phép truy cập trang Báo Cáo Đơn Hàng. Vui lòng liên hệ quản trị viên để được cấp quyền.</p>
+        </Card>
+      </div>
+    );
+  }
+
   const [loading, setLoading] = useState(false);
   const [orders, setOrders] = useState([]);
   const [filteredOrders, setFilteredOrders] = useState([]);
@@ -146,6 +163,10 @@ const OrderReport = () => {
 
   // Export Unit Report
   const exportUnitReport = () => {
+    if (!canExportReport) {
+      message.error('Bạn không có quyền xuất báo cáo Báo Cáo Đơn Hàng.');
+      return;
+    }
     // Summary data
     const summary = [{
       'Loại báo cáo': `Báo cáo xuất kho theo đơn vị - ${orderTypeFilter === 'ecommerce' ? 'TMĐT' : orderTypeFilter === 'retail' ? 'Lẻ' : 'Sỉ'}`,
@@ -181,6 +202,11 @@ const OrderReport = () => {
 
   // Export Excel
   const exportExcel = () => {
+    if (!canExportReport) {
+      message.error('Bạn không có quyền xuất báo cáo Báo Cáo Đơn Hàng.');
+      return;
+    }
+    
     const data = filteredOrders.map((o, i) => {
       const firstItem = o.items && o.items.length > 0 ? o.items[0] : {};
       const totalQty = o.totalQuantity || (o.items ? o.items.reduce((s, item) => s + (item.quantity || 0), 0) : 0);

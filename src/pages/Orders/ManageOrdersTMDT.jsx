@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { database } from '../../services/firebase.service';
 import { useStore } from '../../contexts/StoreContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { ref, onValue, remove, update } from 'firebase/database';
 import {
   Card,
@@ -46,7 +47,27 @@ const { Option } = Select;
 const ManageOrdersTMDT = () => {
   const navigate = useNavigate();
   const { selectedStore, stores } = useStore();
-  
+  const { user, isAdmin } = useAuth();
+  const userPermissions = user?.permissions || [];
+  const hasPermission = isAdmin || userPermissions.includes('orders.manage.ecommerce.view');
+  const canViewDetail = isAdmin || userPermissions.includes('orders.manage.ecommerce.detail');
+  const canDeleteSingle = isAdmin || userPermissions.includes('orders.manage.ecommerce.delete.single');
+  const canDeleteBulk = isAdmin || userPermissions.includes('orders.manage.ecommerce.delete.bulk');
+  const canDeleteAll = isAdmin || userPermissions.includes('orders.manage.ecommerce.delete.all');
+  const canExportExcel = isAdmin || userPermissions.includes('orders.manage.ecommerce.export');
+  const canPrint = isAdmin || userPermissions.includes('orders.manage.ecommerce.print');
+
+  if (!hasPermission) {
+    return (
+      <div style={{ padding: '24px' }}>
+        <Card>
+          <h1>Không có quyền truy cập</h1>
+          <p>Bạn không được phép truy cập trang Quản Lý Đơn Hàng TMĐT. Vui lòng liên hệ quản trị viên để được cấp quyền.</p>
+        </Card>
+      </div>
+    );
+  }
+
   // States
   const [orders, setOrders] = useState([]);
   const [filteredOrders, setFilteredOrders] = useState([]);
@@ -221,6 +242,10 @@ const ManageOrdersTMDT = () => {
 
   // Delete single order
   const handleDeleteOrder = async (record) => {
+    if (!canDeleteSingle) {
+      message.error('Bạn không có quyền xóa đơn hàng.');
+      return;
+    }
     try {
       const orderRef = ref(database, `salesOrders/${record.id}`);
       await remove(orderRef);
@@ -236,6 +261,11 @@ const ManageOrdersTMDT = () => {
   const handleDeleteSelected = async () => {
     if (selectedRowKeys.length === 0) {
       message.warning('Vui lòng chọn ít nhất 1 đơn hàng để xóa!');
+      return;
+    }
+
+    if (!canDeleteBulk) {
+      message.error('Bạn không có quyền xóa nhiều đơn hàng.');
       return;
     }
 
@@ -262,6 +292,11 @@ const ManageOrdersTMDT = () => {
   const handleDeleteAll = async () => {
     if (filteredOrders.length === 0) {
       message.warning('Không có đơn hàng nào để xóa!');
+      return;
+    }
+
+    if (!canDeleteAll) {
+      message.error('Bạn không có quyền xóa tất cả đơn hàng.');
       return;
     }
 
@@ -386,12 +421,20 @@ const ManageOrdersTMDT = () => {
 
   // View order detail
   const handleViewDetail = (record) => {
+    if (!canViewDetail) {
+      message.error('Bạn không có quyền xem chi tiết đơn hàng.');
+      return;
+    }
     setSelectedOrder(record);
     setDetailModalVisible(true);
   };
 
   // Print Invoice
   const handlePrintInvoice = (record) => {
+    if (!canPrint) {
+      message.error('Bạn không có quyền in hóa đơn.');
+      return;
+    }
     // Create print window
     const printWindow = window.open('', '_blank', 'width=800,height=600');
     
@@ -566,6 +609,11 @@ const ManageOrdersTMDT = () => {
       return;
     }
 
+    if (!canPrint) {
+      message.error('Bạn không có quyền in hóa đơn.');
+      return;
+    }
+
     const selectedOrders = orders.filter(order => selectedRowKeys.includes(order.id));
     const printWindow = window.open('', '_blank', 'width=800,height=600');
     
@@ -630,6 +678,11 @@ const ManageOrdersTMDT = () => {
       return;
     }
 
+    if (!canPrint) {
+      message.error('Bạn không có quyền in hóa đơn.');
+      return;
+    }
+
     const printWindow = window.open('', '_blank', 'width=800,height=600');
     
     const invoicesHTML = `
@@ -688,6 +741,10 @@ const ManageOrdersTMDT = () => {
 
   // Export to Excel
   const handleExportExcel = () => {
+    if (!canExportExcel) {
+      message.error('Bạn không có quyền xuất file Excel.');
+      return;
+    }
     const exportData = filteredOrders.map((order, index) => ({
       'STT': index + 1,
       'Mã Đơn': order.orderId,
