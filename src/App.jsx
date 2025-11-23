@@ -21,6 +21,7 @@ import StaffManagement from './pages/HR/StaffManagement';
 import RoleManagement from './pages/HR/RoleManagement';
 import Profile from './pages/Profile';
 import ChangePassword from './pages/ChangePassword';
+import Settings from './pages/Settings';
 import MainLayout from './components/Layout/MainLayout';
 import './App.css';
 
@@ -117,6 +118,7 @@ function App() {
               {/* User Profile & Settings */}
               <Route path="profile" element={<Profile />} />
               <Route path="change-password" element={<ChangePassword />} />
+              <Route path="settings" element={<Settings />} />
             </Route>
             
             {/* Redirect mọi route không tồn tại về dashboard */}

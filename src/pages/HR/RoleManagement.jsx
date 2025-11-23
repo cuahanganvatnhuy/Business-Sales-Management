@@ -221,6 +221,17 @@ const PERMISSION_GROUPS = [
     ]
   },
   {
+    key: 'settings-manage',
+    label: 'Quản Lý Cài Đặt',
+    permissions: [
+      { key: 'settings.view', label: 'Truy cập trang Cài Đặt' },
+      { key: 'settings.database.config', label: 'Cấu hình Database' },
+      { key: 'settings.database.reset', label: 'Xóa cấu hình Database về mặc định' },
+      { key: 'settings.expiration.store', label: 'Quản lý thời gian hết hạn theo cửa hàng' },
+      { key: 'settings.expiration.account', label: 'Quản lý thời gian hết hạn theo tài khoản' }
+    ]
+  },
+  {
     key: 'categories',
     label: 'Danh Mục Sản Phẩm',
     permissions: [

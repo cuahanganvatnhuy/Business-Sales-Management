@@ -36,6 +36,59 @@ export const login = async (email, password) => {
       if (staffData.status === 'inactive' || staffData.status === 'suspended') {
         throw new Error('Tài khoản đã bị vô hiệu hóa hoặc tạm khóa');
       }
+      
+      // Kiểm tra thời gian hết hạn của tài khoản
+      if (staffData.expirationDate) {
+        const expirationDate = new Date(staffData.expirationDate);
+        const now = new Date();
+        if (expirationDate < now) {
+          throw new Error(`Tài khoản đã hết hạn từ ngày ${expirationDate.toLocaleDateString('vi-VN')}`);
+        }
+      }
+      
+      // Kiểm tra thời gian hết hạn của cửa hàng
+      // Lấy danh sách cửa hàng mà tài khoản có quyền truy cập
+      let storeIdsToCheck = [];
+      if (staffData.allowedStoreIds) {
+        if (staffData.allowedStoreIds === 'all') {
+          // Nếu là 'all', cần kiểm tra tất cả cửa hàng
+          const storesRef = ref(database, 'stores');
+          const storesSnapshot = await get(storesRef);
+          if (storesSnapshot.exists()) {
+            storeIdsToCheck = Object.keys(storesSnapshot.val());
+          }
+        } else if (Array.isArray(staffData.allowedStoreIds)) {
+          storeIdsToCheck = staffData.allowedStoreIds;
+        } else if (staffData.allowedStoreIds) {
+          storeIdsToCheck = [staffData.allowedStoreIds];
+        }
+      } else if (staffData.storeId) {
+        storeIdsToCheck = [staffData.storeId];
+      }
+      
+      // Kiểm tra từng cửa hàng
+      for (const storeId of storeIdsToCheck) {
+        try {
+          const storeRef = ref(database, `stores/${storeId}`);
+          const storeSnapshot = await get(storeRef);
+          if (storeSnapshot.exists()) {
+            const storeData = storeSnapshot.val();
+            if (storeData.expirationDate) {
+              const storeExpirationDate = new Date(storeData.expirationDate);
+              const now = new Date();
+              if (storeExpirationDate < now) {
+                throw new Error(`Cửa hàng "${storeData.name || storeId}" đã hết hạn từ ngày ${storeExpirationDate.toLocaleDateString('vi-VN')}. Tất cả tài khoản thuộc cửa hàng này đã bị khóa.`);
+              }
+            }
+          }
+        } catch (error) {
+          // Nếu lỗi là về hết hạn, throw lại
+          if (error.message.includes('hết hạn')) {
+            throw error;
+          }
+          // Các lỗi khác thì bỏ qua
+        }
+      }
     }
     
     // Lấy roleIds từ staffAccounts hoặc dùng role từ users
@@ -155,10 +208,68 @@ export const onAuthStateChange = (callback) => {
         const staffData = staffSnapshot.exists() ? staffSnapshot.val() : null;
         
         // Kiểm tra trạng thái tài khoản nếu là nhân sự
-        if (staffData && (staffData.status === 'inactive' || staffData.status === 'suspended')) {
-          // Không load dữ liệu nếu tài khoản bị vô hiệu hóa
-          callback(null);
-          return;
+        if (staffData) {
+          if (staffData.status === 'inactive' || staffData.status === 'suspended') {
+            // Không load dữ liệu nếu tài khoản bị vô hiệu hóa
+            callback(null);
+            return;
+          }
+          
+          // Kiểm tra thời gian hết hạn của tài khoản
+          if (staffData.expirationDate) {
+            const expirationDate = new Date(staffData.expirationDate);
+            const now = new Date();
+            if (expirationDate < now) {
+              // Tài khoản đã hết hạn
+              callback(null);
+              return;
+            }
+          }
+          
+          // Kiểm tra thời gian hết hạn của cửa hàng
+          let storeIdsToCheck = [];
+          if (staffData.allowedStoreIds) {
+            if (staffData.allowedStoreIds === 'all') {
+              // Nếu là 'all', cần kiểm tra tất cả cửa hàng
+              try {
+                const storesRef = ref(database, 'stores');
+                const storesSnapshot = await get(storesRef);
+                if (storesSnapshot.exists()) {
+                  storeIdsToCheck = Object.keys(storesSnapshot.val());
+                }
+              } catch (error) {
+                console.error('Error loading stores:', error);
+              }
+            } else if (Array.isArray(staffData.allowedStoreIds)) {
+              storeIdsToCheck = staffData.allowedStoreIds;
+            } else if (staffData.allowedStoreIds) {
+              storeIdsToCheck = [staffData.allowedStoreIds];
+            }
+          } else if (staffData.storeId) {
+            storeIdsToCheck = [staffData.storeId];
+          }
+          
+          // Kiểm tra từng cửa hàng
+          for (const storeId of storeIdsToCheck) {
+            try {
+              const storeRef = ref(database, `stores/${storeId}`);
+              const storeSnapshot = await get(storeRef);
+              if (storeSnapshot.exists()) {
+                const storeData = storeSnapshot.val();
+                if (storeData.expirationDate) {
+                  const storeExpirationDate = new Date(storeData.expirationDate);
+                  const now = new Date();
+                  if (storeExpirationDate < now) {
+                    // Cửa hàng đã hết hạn
+                    callback(null);
+                    return;
+                  }
+                }
+              }
+            } catch (error) {
+              console.error(`Error checking store ${storeId}:`, error);
+            }
+          }
         }
         
         // Lấy roleIds từ staffAccounts hoặc dùng role từ users

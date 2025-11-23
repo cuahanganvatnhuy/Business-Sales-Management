@@ -1,0 +1,25 @@
+{
+  "users": {
+    "Phc74JKL84c7xXiWkJqMrUgTmQw2": {
+      "email": "admin@pmqldh.com",
+      "displayName": "Administrator",
+      "role": "admin",
+      "status": "active",
+      "createdAt": "2025-01-01T00:00:00.000Z"
+    }
+  },
+  "staffAccounts": {
+    "Phc74JKL84c7xXiWkJqMrUgTmQw2": {
+      "uid": "Phc74JKL84c7xXiWkJqMrUgTmQw2",
+      "email": "admin@pmqldh.com",
+      "fullName": "Administrator",
+      "phone": "",
+      "note": "Tài khoản quản trị viên",
+      "roleIds": ["admin"],
+      "allowedStoreIds": "all",
+      "status": "active",
+      "createdAt": 1735689600000
+    }
+  }
+}
+

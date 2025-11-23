@@ -17,7 +17,8 @@ import {
   DollarOutlined,
   PlusOutlined,
   EnvironmentOutlined,
-  LineChartOutlined
+  LineChartOutlined,
+  ClockCircleOutlined
 } from '@ant-design/icons';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
@@ -83,6 +84,8 @@ const MainLayout = () => {
     '/invoices/payment': 'invoices.payment.view',
     '/hr/staff': 'hr.staff.view',
     '/hr/roles': 'hr.roles.view',
+    'settings': null, // Menu group - hiển thị nếu có ít nhất 1 child có quyền
+    '/settings': 'settings.view',
   };
 
   // Hàm lọc menu items dựa trên permissions
@@ -345,9 +348,16 @@ const MainLayout = () => {
       ]
     },
     {
-      key: '/settings',
+      key: 'settings',
       icon: <SettingOutlined />,
       label: 'Cài Đặt',
+      children: (isAdmin || hasPermission('settings.view')) ? [
+        {
+          key: '/settings',
+          icon: <ClockCircleOutlined />,
+          label: 'Thời gian hết hạn',
+        },
+      ] : []
     },
   ];
 
