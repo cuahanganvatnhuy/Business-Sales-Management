@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ConfigProvider } from 'antd';
 import viVN from 'antd/locale/vi_VN';
@@ -26,6 +26,19 @@ import MainLayout from './components/Layout/MainLayout';
 import './App.css';
 
 function App() {
+  useEffect(() => {
+    const applyZoom = () => {
+      const width = window.innerWidth;
+      if (width <= 1600) {
+        document.body.classList.add('app-zoom-80');
+      } else {
+        document.body.classList.remove('app-zoom-80');
+      }
+    };
+    applyZoom();
+    window.addEventListener('resize', applyZoom);
+    return () => window.removeEventListener('resize', applyZoom);
+  }, []);
   return (
     <ConfigProvider locale={viVN}>
       <AuthProvider>

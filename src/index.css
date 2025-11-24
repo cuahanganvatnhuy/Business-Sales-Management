@@ -72,3 +72,13 @@ button:focus-visible {
     /* padding: 2rem; */
     /* text-align: center; */
 }
+body.app-zoom-80 {
+  zoom: 0.8;
+}
+@supports not (zoom: 0.8) {
+  body.app-zoom-80 #root {
+    transform: scale(0.8);
+    transform-origin: top left;
+    width: 125%;
+  }
+}
