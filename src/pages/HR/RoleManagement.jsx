@@ -619,8 +619,53 @@ const handleSaveRole = async () => {
   };
 
   return (
-    <div style={{ padding: 24 }}>
-      <Card bodyStyle={{ padding: 20 }} style={{ marginBottom: 16 }}>
+    <div style={{ padding: 24, background: '#f5f5f5', minHeight: '100vh' }}>
+      <div
+        style={{
+          background: '#fff',
+          padding: '16px 24px',
+          borderRadius: 12,
+          boxShadow: '0 12px 30px rgba(5, 153, 0, 0.08)',
+          marginBottom: 16
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: '50%',
+              background: '#e6f7e6',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            <SafetyCertificateOutlined style={{ fontSize: 24, color: '#0f9d58' }} />
+          </div>
+          <div>
+            <Title
+              level={2}
+               style={{ margin: 0, color: 'rgb(8 125 68)', fontWeight: 'bold', fontSize: 23 }}
+            >
+              Cài Đặt Phân Quyền
+            </Title>
+            <Text type="secondary">
+              Quản lý các nhóm quyền sử dụng hệ thống  xem, in báo cáo...)
+            </Text>
+          </div>
+        </div>
+      </div>
+
+      <div
+        style={{
+          background: '#fff',
+          padding: 20,
+          borderRadius: 12,
+          boxShadow: '0 8px 24px rgba(0, 0, 0, 0.05)',
+          marginBottom: 16
+        }}
+      >
         <div
           style={{
             display: 'flex',
@@ -630,34 +675,24 @@ const handleSaveRole = async () => {
             alignItems: 'center'
           }}
         >
-          <div>
-            <Title level={3} style={{ margin: 0 }}>
-              Cài Đặt Phân Quyền
-            </Title>
-            <Text type="secondary">
-              Quản lý các nhóm quyền sử dụng hệ thống (CRUD, xem, in báo cáo...)
-            </Text>
-          </div>
-          <Space wrap>
-            <Input.Search
-              placeholder="Tìm theo tên / mô tả quyền"
-              allowClear
-              onChange={(e) => setSearchText(e.target.value)}
-              style={{ width: 260 }}
-            />
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={openCreateModal}
-              style={{ background: '#0f9d58', borderColor: '#0f9d58' }}
-            >
-              Thêm quyền / role
-            </Button>
-          </Space>
+          <Input.Search
+            placeholder="Tìm theo tên / mô tả quyền"
+            allowClear
+            onChange={(e) => setSearchText(e.target.value)}
+            style={{ width: 300, flex: '1 1 280px' }}
+          />
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={openCreateModal}
+            style={{ background: '#0f9d58', borderColor: '#0f9d58' }}
+          >
+            Thêm quyền / role
+          </Button>
         </div>
-      </Card>
+      </div>
 
-      <Card bodyStyle={{ padding: 0 }}>
+      <Card bodyStyle={{ padding: 0 }} style={{ borderRadius: 12, boxShadow: '0 8px 24px rgba(0, 0, 0, 0.05)' }}>
         <Table
           rowKey="id"
           loading={loading}

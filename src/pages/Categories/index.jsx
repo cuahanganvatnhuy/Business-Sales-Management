@@ -224,16 +224,62 @@ const Categories = () => {
     );
   }
 
+  const heroStyles = {
+    card: {
+      background: '#fff',
+      padding: '18px 26px',
+      borderRadius: 16,
+      boxShadow: '0 10px 24px rgba(15, 157, 88, 0.12)',
+      marginBottom: 24,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 16,
+      flexWrap: 'wrap'
+    },
+    left: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 16
+    },
+    icon: {
+      width: 52,
+      height: 52,
+      borderRadius: '50%',
+      background: '#e9f8ee',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      color: '#0f9d58',
+      fontSize: 23
+    },
+    title: {
+      margin: 0,
+      color: '#0d7c39',
+      fontWeight: 700,
+      fontSize: 22,
+      lineHeight: 1.2
+    },
+    subtitle: {
+      margin: 4,
+      color: '#5f6b65'
+    }
+  };
+
   return (
     <div className="categories-page">
       {/* Page Header */}
-      <div className="page-header">
-        <div>
-          <h1 style={{ margin: 0, color: '#007A33', fontSize: '28px', fontWeight: '700' }}>
-            <TagsOutlined /> Quản Lý Danh Mục Sản Phẩm
-          </h1>
+      <div style={heroStyles.card}>
+        <div style={heroStyles.left}>
+          <div style={heroStyles.icon}>
+            <TagsOutlined />
+          </div>
+          <div>
+            <h1 style={heroStyles.title}>Quản Lý Danh Mục Sản Phẩm</h1>
+            <p style={heroStyles.subtitle}>Sắp xếp sản phẩm theo nhóm và trạng thái hoạt động</p>
+          </div>
         </div>
-        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd} style={{ height: 44 }}>
           Thêm Danh Mục
         </Button>
       </div>

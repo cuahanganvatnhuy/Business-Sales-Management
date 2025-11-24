@@ -167,7 +167,7 @@ const Dashboard = () => {
       <div style={{ marginBottom: 32 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: 8 }}>
           <DashboardOutlined style={{ fontSize: '32px', color: '#007A33' }} />
-          <h1 style={{ margin: 0, color: '#007A33', fontSize: '28px', fontWeight: '700' }}>Dashboard</h1>
+          <h1 className="page-title" style={{ margin: 0, color: '#007A33' }}>Dashboard</h1>
           {selectedStore && (
             <Tag color={selectedStore.id === 'all' ? 'blue' : 'green'} style={{ fontSize: '14px', padding: '4px 12px' }}>
               {selectedStore.id === 'all' ? '🏪 Toàn Bộ Cửa Hàng' : `📍 ${selectedStore.name}`}

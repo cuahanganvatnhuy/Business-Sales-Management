@@ -67,6 +67,8 @@ const Inventory = () => {
   const [adjustType, setAdjustType] = useState('add'); // 'add' or 'subtract'
   const [updateQuantity, setUpdateQuantity] = useState(0);
   const [printModalVisible, setPrintModalVisible] = useState(false);
+  const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
+  const [productToDelete, setProductToDelete] = useState(null);
   
   // Pagination state
   const [pagination, setPagination] = useState({
@@ -798,24 +800,8 @@ const Inventory = () => {
               icon={<DeleteOutlined style={{ color: '#ff4d4f' }} />}
               danger
               onClick={() => {
-                Modal.confirm({
-                  title: 'Xác nhận xóa',
-                  content: `Bạn có chắc muốn xóa "${record.name}" khỏi kho?`,
-                  okText: 'Xóa',
-                  cancelText: 'Hủy',
-                  okButtonProps: { danger: true },
-                  onOk: async () => {
-                    try {
-                      await update(ref(database, `products/${record.id}`), {
-                        status: 'inactive',
-                        updatedAt: new Date().toISOString()
-                      });
-                      message.success('Đã xóa sản phẩm khỏi kho!');
-                    } catch (error) {
-                      message.error('Lỗi: ' + error.message);
-                    }
-                  }
-                });
+                setProductToDelete(record);
+                setDeleteConfirmVisible(true);
               }}
             >
               Xóa
@@ -1532,6 +1518,38 @@ const Inventory = () => {
           }
         `}</style>
       </Modal>
+
+      {productToDelete && (
+        <Modal
+          title="⚠️ Xác nhận xóa sản phẩm"
+          open={deleteConfirmVisible}
+          okText="Xóa"
+          cancelText="Hủy"
+          okButtonProps={{ danger: true }}
+          onOk={async () => {
+            try {
+              await update(ref(database, `products/${productToDelete.id}`), {
+                status: 'inactive',
+                updatedAt: new Date().toISOString()
+              });
+              message.success('Đã xóa sản phẩm khỏi kho!');
+            } catch (error) {
+              message.error('Lỗi: ' + error.message);
+            } finally {
+              setDeleteConfirmVisible(false);
+              setProductToDelete(null);
+            }
+          }}
+          onCancel={() => {
+            setDeleteConfirmVisible(false);
+            setProductToDelete(null);
+          }}
+          centered
+        >
+          <p>Bạn có chắc muốn xóa "{productToDelete.name}" khỏi kho?</p>
+          <p style={{ color: '#ff4d4f', fontWeight: 600 }}>Hành động này không thể hoàn tác.</p>
+        </Modal>
+      )}
     </div>
   );
 };

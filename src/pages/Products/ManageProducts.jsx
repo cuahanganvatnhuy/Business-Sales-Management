@@ -51,6 +51,54 @@ const ManageProducts = () => {
     outOfStock: 0
   });
 
+  const heroStyles = {
+    card: {
+      background: '#fff',
+      padding: '18px 26px',
+      borderRadius: 16,
+      boxShadow: '0 10px 24px rgba(15, 157, 88, 0.12)',
+      marginBottom: 24,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      flexWrap: 'wrap',
+      gap: 16
+    },
+    left: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 16
+    },
+    icon: {
+      width: 52,
+      height: 52,
+      borderRadius: '50%',
+      background: '#e9f8ee',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      color: '#0f9d58',
+      fontSize: 24
+    },
+    title: {
+      margin: 0,
+      color: '#0d7c39',
+      fontWeight: 700,
+      fontSize: 22,
+      lineHeight: 1.2
+    },
+    subtitle: {
+      margin: 4,
+      color: '#5f6b65'
+    },
+    actions: {
+      display: 'flex',
+      gap: 12,
+      flexWrap: 'wrap',
+      justifyContent: 'flex-end'
+    }
+  };
+
   // Load categories
   useEffect(() => {
     const categoriesRef = ref(database, 'categories');
@@ -374,13 +422,17 @@ const ManageProducts = () => {
   return (
     <div className="manage-products-page">
       {/* Page Header */}
-      <div style={{ marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h1 style={{ margin: 0, color: '#007A33', fontSize: '28px', fontWeight: '700' }}>
-            <BoxPlotOutlined /> Quản Lý Sản Phẩm
-          </h1>
+      <div style={heroStyles.card}>
+        <div style={heroStyles.left}>
+          <div style={heroStyles.icon}>
+            <BoxPlotOutlined />
+          </div>
+          <div>
+            <h1 className="page-title" style={heroStyles.title}>Quản Lý Sản Phẩm</h1>
+            <p style={heroStyles.subtitle}>Theo dõi sản phẩm, tồn kho và trạng thái bán hàng</p>
+          </div>
         </div>
-        <div style={{ display: 'flex', gap: '12px' }}>
+        <div style={heroStyles.actions}>
           {selectedRowKeys.length > 0 && (
             <Popconfirm
               title="Xác nhận xóa hàng loạt"

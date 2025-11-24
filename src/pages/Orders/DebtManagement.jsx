@@ -767,7 +767,7 @@ const DebtManagement = () => {
   const customersWithDebt = filteredCustomers.filter(c => c.totalRemaining > 0).length;
 
   return (
-    <div style={{ padding: '24px' }}>
+    <div style={{ padding: '5px' }}>
       {/* Header */}
       <Card 
         style={{ 
@@ -779,7 +779,7 @@ const DebtManagement = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <DollarOutlined style={{ fontSize: 32, color: '#007A33' }} />
           <div>
-            <h1 style={{ margin: 0, fontSize: 24, color: '#007A33' }}>Công Nợ Khách Hàng Sỉ</h1>
+            <h1 className="page-title" style={{ margin: 0, color: '#007A33' }}>Công Nợ Khách Hàng Sỉ</h1>
             <p style={{ margin: 0, color: '#666' }}>Quản lý công nợ theo từng khách hàng</p>
           </div>
         </div>

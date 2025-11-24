@@ -63,6 +63,13 @@
   margin-top: 5px;
 }
 
+.page-title,
+:where(.ant-layout-content) h1,
+:where(.ant-layout-content) h2 {
+  font-size: 20px !important;
+  line-height: 1.3 !important;
+}
+
 /* Menu Items */
 .ant-menu-dark {
   background: transparent !important;
@@ -81,6 +88,7 @@
   display: flex !important;
   align-items: center !important;
   text-align: left !important;
+  font-size: 13px !important;
 }
 
 .ant-menu-dark .ant-menu-item .ant-menu-title-content,
@@ -116,7 +124,7 @@
 
 .ant-menu-dark .ant-menu-sub .ant-menu-item {
   padding-left: 48px !important;
-  font-size: 14px;
+  font-size: 13px !important;
 }
 
 .ant-menu-dark .ant-menu-sub .ant-menu-item:hover {
@@ -213,7 +221,7 @@
 /* ===== CONTENT AREA ===== */
 .ant-layout-content {
   margin: 0 !important;
-  padding: 24px !important;
+  padding: 15px !important;
   background: #f5f7fa !important;
   border-radius: 0 !important;
   box-shadow: none !important;

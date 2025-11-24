@@ -79,10 +79,59 @@ const ManageOrdersWholesale = () => {
   const [expandedRowKeys, setExpandedRowKeys] = useState([]);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
+  const [orderToDelete, setOrderToDelete] = useState(null);
+
+  useEffect(() => {
+    const styleTag = document.createElement('style');
+    styleTag.id = 'manage-orders-wholesale-layout-style';
+    styleTag.innerHTML = `
+      .manage-orders-wholesale-layout {
+        margin: 0 !important;
+        padding: 15px !important;
+        background: #f5f7fa !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        min-height: 100vh !important;
+        height: 100% !important;
+        overflow-x: auto !important;
+        width: 87% !important;
+        max-width: none !important;
+        flex: 1 !important;
+      }
+      .manage-orders-wholesale-layout > * {
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 auto;
+      }
+      .manage-orders-wholesale-layout :where(.css-dev-only-do-not-override-11mmrso).ant-btn {
+        font-size: 12px !important;
+        height: 32px !important;
+        padding: 0 15px !important;
+        border-radius: 6px !important;
+      }
+    `;
+    document.head.appendChild(styleTag);
+    const layoutContent = document.querySelector('.ant-layout-content');
+    layoutContent?.classList.add('manage-orders-wholesale-layout');
+
+    return () => {
+      document.head.removeChild(styleTag);
+      layoutContent?.classList.remove('manage-orders-wholesale-layout');
+    };
+  }, []);
   const [paymentFilter, setPaymentFilter] = useState('all');
   const [editPaymentModalVisible, setEditPaymentModalVisible] = useState(false);
   const [editingOrder, setEditingOrder] = useState(null);
   const [newPaymentStatus, setNewPaymentStatus] = useState('');
+
+  const navButtonStyle = {
+    fontSize: 12,
+    fontWeight: 600,
+    height: 32,
+    borderRadius: 6,
+    padding: '0 15px'
+  };
 
   // Load orders from Firebase
   useEffect(() => {
@@ -248,9 +297,13 @@ const ManageOrdersWholesale = () => {
       await remove(orderRef);
       message.success('Đã xóa đơn hàng thành công!');
       setSelectedRowKeys(selectedRowKeys.filter(key => key !== record.id));
+      setDeleteConfirmVisible(false);
+      setOrderToDelete(null);
     } catch (error) {
       console.error('Error deleting order:', error);
       message.error('Lỗi khi xóa đơn hàng: ' + error.message);
+      setDeleteConfirmVisible(false);
+      setOrderToDelete(null);
     }
   };
 
@@ -496,8 +549,37 @@ const ManageOrdersWholesale = () => {
     try {
       setLoading(true);
       const orderRef = ref(database, `salesOrders/${editingOrder.id}`);
+      
+      // Calculate deposit and remainingAmount based on new payment status
+      const subtotal = editingOrder.subtotal || 0;
+      let newDeposit = editingOrder.deposit || 0;
+      let newRemaining = editingOrder.remainingAmount !== undefined 
+        ? editingOrder.remainingAmount 
+        : (subtotal - newDeposit);
+      
+      // Update deposit and remainingAmount based on payment status
+      if (newPaymentStatus === 'paid') {
+        // Fully paid: deposit = subtotal, remaining = 0
+        newDeposit = subtotal;
+        newRemaining = 0;
+      } else if (newPaymentStatus === 'pending') {
+        // Not paid: deposit = 0, remaining = subtotal
+        newDeposit = 0;
+        newRemaining = subtotal;
+      } else if (newPaymentStatus === 'partial') {
+        // Partial payment: keep current values if they exist, otherwise set to half
+        if (newDeposit === 0 && newRemaining === subtotal) {
+          // If no payment yet, set to half as default
+          newDeposit = Math.floor(subtotal / 2);
+          newRemaining = subtotal - newDeposit;
+        }
+        // Otherwise keep existing deposit and remainingAmount
+      }
+      
       await update(orderRef, {
         paymentStatus: newPaymentStatus,
+        deposit: newDeposit,
+        remainingAmount: newRemaining,
         updatedAt: new Date().toISOString()
       });
       message.success('Đã cập nhật trạng thái thanh toán!');
@@ -1276,14 +1358,8 @@ const ManageOrdersWholesale = () => {
             label: 'Xóa',
             danger: true,
             onClick: () => {
-              Modal.confirm({
-                title: 'Xóa đơn hàng này?',
-                content: 'Bạn có chắc chắn muốn xóa đơn hàng này không?',
-                okText: 'Xóa',
-                cancelText: 'Hủy',
-                okButtonProps: { danger: true },
-                onOk: () => handleDeleteOrder(record)
-              });
+              setOrderToDelete(record);
+              setDeleteConfirmVisible(true);
             }
           }
         ];
@@ -1319,11 +1395,11 @@ const ManageOrdersWholesale = () => {
   const totalQuantity = filteredOrders.reduce((sum, order) => sum + (order.quantity || 0), 0);
 
   return (
-    <div style={{ padding: '24px' }}>
+    <div style={{ padding: '5px' }}>
       {/* Header */}
       <Card 
         style={{ 
-          marginBottom: 24,
+          marginBottom: 12,
           borderRadius: 12,
           boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
         }}
@@ -1331,14 +1407,14 @@ const ManageOrdersWholesale = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <TeamOutlined style={{ fontSize: 32, color: '#007A33' }} />
           <div>
-            <h1 style={{ margin: 0, fontSize: 24, color: '#007A33' }}>Quản Lý Đơn Hàng Bán Sỉ</h1>
+            <h1 className="page-title" style={{ margin: 0, color: '#007A33' }}>Quản Lý Đơn Hàng Bán Sỉ</h1>
             <p style={{ margin: 0, color: '#666' }}>Quản lý các đơn hàng từ TMĐT, Bán Lẻ và Bán Sỉ</p>
           </div>
         </div>
       </Card>
 
       {/* Order Type Tabs */}
-      <div style={{ marginBottom: 24 }}>
+      <div style={{ marginBottom: 12}}>
         <Space size="middle">
           <Button
             icon={<ShoppingOutlined />}
@@ -1347,7 +1423,8 @@ const ManageOrdersWholesale = () => {
             style={{
               borderColor: '#d9d9d9',
               background: 'white',
-              color: '#666'
+              color: '#666',
+              ...navButtonStyle
             }}
           >
             Quản lý đơn hàng TMĐT
@@ -1359,7 +1436,8 @@ const ManageOrdersWholesale = () => {
             style={{
               borderColor: '#d9d9d9',
               background: 'white',
-              color: '#666'
+              color: '#666',
+              ...navButtonStyle
             }}
           >
             Quản lý đơn hàng lẻ
@@ -1370,7 +1448,8 @@ const ManageOrdersWholesale = () => {
             type="primary"
             style={{
               background: '#007A33',
-              borderColor: '#007A33'
+              borderColor: '#007A33',
+              ...navButtonStyle
             }}
           >
             Quản lý đơn hàng sỉ
@@ -1467,7 +1546,6 @@ const ManageOrdersWholesale = () => {
               title="Tổng Doanh Thu"
               value={totalRevenue}
               precision={0}
-              suffix="₫"
               valueStyle={{ color: '#007A33' }}
               formatter={(value) => formatCurrency(value)}
             />
@@ -1479,7 +1557,6 @@ const ManageOrdersWholesale = () => {
               title="Tổng Lợi Nhuận"
               value={totalProfit}
               precision={0}
-              suffix="₫"
               valueStyle={{ color: totalProfit >= 0 ? '#52c41a' : '#ff4d4f' }}
               formatter={(value) => formatCurrency(value)}
             />
@@ -1905,6 +1982,26 @@ const ManageOrdersWholesale = () => {
           </div>
         )}
       </Modal>
+
+      {/* Modal confirm for delete single order */}
+      {orderToDelete && (
+        <Modal
+          title="⚠️ Xóa đơn hàng"
+          open={deleteConfirmVisible}
+          onOk={() => handleDeleteOrder(orderToDelete)}
+          onCancel={() => {
+            setDeleteConfirmVisible(false);
+            setOrderToDelete(null);
+          }}
+          okText="Xóa"
+          cancelText="Hủy"
+          okButtonProps={{ danger: true }}
+          centered
+        >
+          <p><strong>Xóa đơn hàng {orderToDelete.orderId || 'N/A'}?</strong></p>
+          <p>Bạn có chắc chắn muốn xóa đơn hàng này không? Hành động này không thể hoàn tác!</p>
+        </Modal>
+      )}
     </div>
   );
 };

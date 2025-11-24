@@ -12,7 +12,6 @@ import {
   Col,
   message,
   Select,
-  Divider,
   Modal,
   Form,
   Input,
@@ -590,19 +589,45 @@ const StoreInvoice = () => {
 
 
   return (
-    <div style={{ padding: '24px' }}>
-      <Card>
-        <Space direction="vertical" size="large" style={{ width: '100%' }}>
-          {/* Header */}
+    <div style={{ padding: '24px', background: '#f5f5f5', minHeight: '100vh' }}>
+      <div
+        style={{
+          background: '#fff',
+          padding: '16px 24px',
+          borderRadius: 12,
+          boxShadow: '0 12px 30px rgba(5, 153, 0, 0.08)',
+          marginBottom: 24
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: '50%',
+              background: '#e6f7e6',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            <ShopOutlined style={{ fontSize: 20, color: '#0f9d58' }} />
+          </div>
           <div>
-            <Title level={2}>
-              <ShopOutlined style={{ marginRight: 8 }} />
-              Hóa Đơn Từng Cửa Hàng 
+            <Title level={2} style={{ margin: 0, color: 'rgb(8 125 68)', fontWeight: 'bold', fontSize: 23 }}>
+              Hóa Đơn Từng Cửa Hàng
             </Title>
             <Text type="secondary">Xem và in hóa đơn theo từng cửa hàng</Text>
           </div>
+        </div>
+      </div>
 
-          <Divider />
+      <Card
+        style={{ borderRadius: 12, boxShadow: '0 10px 30px rgba(15, 157, 88, 0.08)' }}
+        bodyStyle={{ padding: 0 }}
+      >
+        <div style={{ padding: 24 }}>
+          <Space direction="vertical" size="large" style={{ width: '100%' }}>
 
           {/* Store & Date Selection */}
           <Card size="small" style={{ background: '#f5f7fa' }}>
@@ -848,7 +873,8 @@ const StoreInvoice = () => {
               </div>
             </Card>
           )}
-        </Space>
+          </Space>
+        </div>
       </Card>
 
       {/* Payment Modal */}

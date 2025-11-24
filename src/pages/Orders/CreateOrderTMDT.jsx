@@ -341,6 +341,17 @@ const CreateOrderTMDT = () => {
   const handleProductChange = (orderId, itemKey, productId) => {
     const product = sellingProducts.find(p => p.id === productId);
     if (product) {
+      // Kiểm tra stock ngay khi chọn sản phẩm
+      const quantity = 1; // Mặc định quantity = 1 khi chọn sản phẩm
+      const stockCheck = checkStockAvailability(productId, quantity, products, sellingProducts);
+      
+      // Cảnh báo nếu stock = 0 hoặc không đủ
+      if (stockCheck.stock === 0) {
+        message.error(`🚨 CẢNH BÁO: Sản phẩm "${product.productName}" (SKU: ${product.sku || 'N/A'}) ĐÃ HẾT HÀNG! Tồn kho: 0. Không thể tạo đơn hàng với sản phẩm này!`, 5);
+      } else if (!stockCheck.available) {
+        message.warning(`⚠️ Sản phẩm "${product.productName}" không đủ hàng! ${stockCheck.message}`, 4);
+      }
+      
       setOrderForms(prevForms =>
         prevForms.map(form => {
           if (form.id === orderId) {
@@ -387,9 +398,10 @@ const CreateOrderTMDT = () => {
     if (item && item.productId) {
       const stockCheck = checkStockAvailability(item.productId, quantity, products, sellingProducts);
       
-      if (!stockCheck.available) {
-        message.warning(stockCheck.message);
-        // Still allow update but show warning
+      if (stockCheck.stock === 0) {
+        message.error(`🚨 Sản phẩm "${item.productName}" (SKU: ${item.sku || 'N/A'}) ĐÃ HẾT HÀNG! Tồn kho: 0. Không thể tạo đơn hàng!`, 5);
+      } else if (!stockCheck.available) {
+        message.warning(`⚠️ ${stockCheck.message}`, 4);
       }
     }
     
@@ -551,23 +563,91 @@ const CreateOrderTMDT = () => {
     const stockValidation = validateStock(allItems, products, sellingProducts);
     
     console.log('📊 Validation result:', stockValidation);
+    console.log('📊 Errors:', stockValidation.errors);
     
     if (!stockValidation.valid) {
+      // Kiểm tra xem có sản phẩm hết hàng không
+      const hasOutOfStock = stockValidation.errors.some(err => err.includes('HẾT HÀNG') || err.includes('ĐÃ HẾT HÀNG'));
+      const hasProductNotFound = stockValidation.errors.some(err => err.includes('không tồn tại'));
+      
+      // Thông báo ngay bằng message.error
+      const errorMessage = hasOutOfStock 
+        ? '🚨 KHÔNG THỂ TẠO ĐƠN HÀNG! Có sản phẩm ĐÃ HẾT HÀNG trong kho!'
+        : '⚠️ Không thể tạo đơn hàng! Có sản phẩm không đủ hàng trong kho!';
+      
+      message.error(errorMessage, 5);
+      
+      // Hiển thị Modal.error ngay lập tức
+      const modalTitle = hasOutOfStock 
+        ? '🚨 KHÔNG THỂ TẠO ĐƠN HÀNG - KHO HẾT HÀNG!'
+        : '⚠️ KHÔNG THỂ TẠO ĐƠN HÀNG - KHO KHÔNG ĐỦ HÀNG!';
+      
       Modal.error({
-        title: 'Không đủ hàng trong kho!',
+        title: modalTitle,
         content: (
-          <div>
-            {stockValidation.errors.map((error, index) => (
-              <div key={index} style={{ marginBottom: 8, color: '#ff4d4f' }}>
-                • {error}
-              </div>
-            ))}
+          <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+            <div style={{ 
+              marginBottom: 16, 
+              padding: 12, 
+              background: hasOutOfStock ? '#fff2f0' : '#fffbe6',
+              border: hasOutOfStock ? '1px solid #ffccc7' : '1px solid #ffe58f',
+              borderRadius: 6
+            }}>
+              <strong style={{ color: hasOutOfStock ? '#ff4d4f' : '#faad14', fontSize: 16 }}>
+                {hasOutOfStock ? '🚨' : '⚠️'} Có {stockValidation.errors.length} sản phẩm gặp vấn đề về tồn kho:
+              </strong>
+            </div>
+            {stockValidation.errors.map((error, index) => {
+              const isOutOfStock = error.includes('HẾT HÀNG') || error.includes('ĐÃ HẾT HÀNG');
+              return (
+                <div 
+                  key={index} 
+                  style={{ 
+                    marginBottom: 12, 
+                    padding: 12,
+                    background: isOutOfStock ? '#fff1f0' : '#fff',
+                    border: isOutOfStock ? '2px solid #ff4d4f' : '1px solid #ffccc7',
+                    borderRadius: 6,
+                    color: isOutOfStock ? '#ff4d4f' : '#fa8c16',
+                    fontSize: 14,
+                    lineHeight: 1.6,
+                    fontWeight: isOutOfStock ? 'bold' : 'normal'
+                  }}
+                >
+                  <strong>• {error}</strong>
+                </div>
+              );
+            })}
+            <div style={{ 
+              marginTop: 16, 
+              padding: 12, 
+              background: '#f6ffed', 
+              border: '1px solid #b7eb8f',
+              borderRadius: 6,
+              fontSize: 13,
+              color: '#52c41a'
+            }}>
+              💡 <strong>Giải pháp:</strong> Vui lòng kiểm tra tồn kho và nhập thêm hàng trước khi tạo đơn hàng!
+            </div>
           </div>
         ),
         okText: 'Đã hiểu',
         centered: true,
-        width: 600
+        width: 750,
+        okButtonProps: {
+          style: {
+            background: hasOutOfStock ? '#ff4d4f' : '#faad14',
+            borderColor: hasOutOfStock ? '#ff4d4f' : '#faad14',
+            height: 40,
+            fontSize: 14,
+            fontWeight: 'bold'
+          }
+        },
+        maskClosable: false,
+        closable: true,
+        zIndex: 10000
       });
+      
       return;
     }
     
@@ -702,13 +782,14 @@ const CreateOrderTMDT = () => {
 
   return (
     <Spin spinning={loading}>
-      <div className="create-order-page">
+      <div className="create-order-page"style={{padding:5}}>
         {/* Header */}
         <Card 
           style={{ 
             marginBottom: 24,
             borderRadius: 12,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+          
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -949,12 +1030,12 @@ const CreateOrderTMDT = () => {
               <Space>
                 <span style={{ color: '#666' }}>
                   Tổng: <strong style={{ color: '#52c41a', fontSize: 16 }}>
-                    {formatCurrency(totalAmount)} ₫
+                    {formatCurrency(totalAmount)}
                   </strong>
                 </span>
                 <span style={{ color: '#666' }}>
                   Lợi nhuận: <strong style={{ color: '#1890ff', fontSize: 16 }}>
-                    {formatCurrency(totalProfit)} ₫
+                    {formatCurrency(totalProfit)}
                   </strong>
                 </span>
               </Space>
@@ -1174,7 +1255,7 @@ const CreateOrderTMDT = () => {
                         <div>
                           <span style={{ color: '#666' }}>Tổng tiền: </span>
                           <strong style={{ color: '#1890ff', fontSize: 16 }}>
-                            {formatCurrency(calculateOrderTotals(form).totalAmount)} ₫
+                            {formatCurrency(calculateOrderTotals(form).totalAmount)}
                           </strong>
                         </div>
                         <div>
@@ -1183,7 +1264,7 @@ const CreateOrderTMDT = () => {
                             color: calculateOrderTotals(form).totalProfit > 0 ? '#52c41a' : '#ff4d4f',
                             fontSize: 16
                           }}>
-                            {formatCurrency(calculateOrderTotals(form).totalProfit)} ₫
+                            {formatCurrency(calculateOrderTotals(form).totalProfit)}
                           </strong>
                         </div>
                       </div>
@@ -1379,7 +1460,7 @@ const CreateOrderTMDT = () => {
         }}
         onCancel={() => {
           setShowSuccessModal(false);
-          navigate('/orders/manage');
+          navigate('/orders/manage/ecommerce');
         }}
         okText="Ở Lại Trang Này"
         cancelText="Quản Lý Đơn Hàng"

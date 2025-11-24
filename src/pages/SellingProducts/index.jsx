@@ -128,6 +128,54 @@ const SellingProducts = () => {
       : 0
   };
 
+  const heroStyles = {
+    card: {
+      background: '#fff',
+      padding: '18px 26px',
+      borderRadius: 16,
+      boxShadow: '0 10px 24px rgba(15, 157, 88, 0.12)',
+      marginBottom: 24,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      flexWrap: 'wrap',
+      gap: 16
+    },
+    left: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 16
+    },
+    icon: {
+      width: 52,
+      height: 52,
+      borderRadius: '50%',
+      background: '#e9f8ee',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      color: '#0f9d58',
+      fontSize: 24
+    },
+    title: {
+      margin: 0,
+      color: '#0d7c39',
+      fontWeight: 700,
+      fontSize: 23,
+      lineHeight: 1.2
+    },
+    subtitle: {
+      margin: 4,
+      color: '#5f6b65'
+    },
+    actions: {
+      display: 'flex',
+      gap: 12,
+      flexWrap: 'wrap',
+      justifyContent: 'flex-end'
+    }
+  };
+
   // Handle sync all products
   const handleSyncAll = () => {
     if (!canSyncAll) {
@@ -787,25 +835,25 @@ const SellingProducts = () => {
     <div className="selling-products-page">
       <Spin spinning={loading}>
         {/* Page Header */}
-        <div className="page-header">
-          <h1>
-            <MoneyCollectOutlined /> Quản Lý Sản Phẩm Bán
-          </h1>
-          <div className="action-buttons">
-            <Button 
-              icon={<PlusOutlined />} 
-              onClick={handleSelectProducts}
-            >
+        <div style={heroStyles.card}>
+          <div style={heroStyles.left}>
+            <div style={heroStyles.icon}>
+              <MoneyCollectOutlined />
+            </div>
+            <div>
+              <h1 style={heroStyles.title}>Quản Lý Sản Phẩm Bán</h1>
+              <p style={heroStyles.subtitle}>Đồng bộ sản phẩm và quản lý giá bán trên các kênh</p>
+            </div>
+          </div>
+          <div style={heroStyles.actions}>
+            <Button icon={<PlusOutlined />} onClick={handleSelectProducts}>
               Chọn Sản Phẩm Lẻ
             </Button>
-            <Button 
-              icon={<SyncOutlined />} 
-              onClick={handleSyncAll}
-            >
+            <Button icon={<SyncOutlined />} onClick={handleSyncAll}>
               Đồng Bộ Toàn Bộ
             </Button>
-            <Button 
-              icon={<FileExcelOutlined />} 
+            <Button
+              icon={<FileExcelOutlined />}
               onClick={handleExportExcel}
               style={{ background: '#52c41a', borderColor: '#52c41a', color: 'white' }}
             >

@@ -798,18 +798,45 @@ const PaymentInvoice = () => {
   ];
 
   return (
-    <div style={{ padding: '24px' }}>
-      <Card>
+    <div style={{ padding: '24px', background: '#f5f5f5', minHeight: '100vh' }}>
+      <div
+        style={{
+          background: '#fff',
+          padding: '16px 24px',
+          borderRadius: 12,
+          marginBottom: 24,
+          boxShadow: '0 12px 30px rgba(5, 153, 0, 0.08)'
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: '50%',
+              background: '#e6f7e6',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            <DollarOutlined style={{ fontSize: 20, color: '#0f9d58' }} />
+          </div>
+          <div>
+            <Title level={2} style={{ margin: 0, color: 'rgb(8 125 68)', fontWeight: 'bold', fontSize: 23 }}>
+              Hóa Đơn Thanh Toán
+            </Title>
+            <Text type="secondary">Quản lý hóa đơn thanh toán của khách hàng</Text>
+          </div>
+        </div>
+      </div>
+
+      <Card
+        style={{ borderRadius: 12, boxShadow: '0 10px 30px rgba(15, 157, 88, 0.08)' }}
+        bodyStyle={{ padding: 24 }}
+      >
         <Space direction="vertical" size="large" style={{ width: '100%' }}>
-          {/* Header */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <Title level={2}>
-                <DollarOutlined style={{ marginRight: 8 }} />
-                Hóa Đơn Thanh Toán
-              </Title>
-              <Text type="secondary">Quản lý hóa đơn thanh toán của khách hàng</Text>
-            </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
             <Space>
               <Button
                 type="primary"
@@ -855,19 +882,15 @@ const PaymentInvoice = () => {
                 </Popconfirm>
               )}
             </Space>
+            <Input
+              placeholder="Tìm kiếm theo mã hóa đơn, tên khách hàng, cửa hàng..."
+              prefix={<SearchOutlined />}
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              style={{ minWidth: 280, maxWidth: 400 }}
+              allowClear
+            />
           </div>
-
-          <Divider />
-
-          {/* Search */}
-          <Input
-            placeholder="Tìm kiếm theo mã hóa đơn, tên khách hàng, cửa hàng..."
-            prefix={<SearchOutlined />}
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-            style={{ width: 400 }}
-            allowClear
-          />
 
           {/* Table */}
           <Table

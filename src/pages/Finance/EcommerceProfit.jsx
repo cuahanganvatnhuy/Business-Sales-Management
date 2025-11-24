@@ -130,6 +130,7 @@ const EcommerceProfit = () => {
   const [loading, setLoading] = useState(false);
   const [orders, setOrders] = useState([]);
   const [filteredOrders, setFilteredOrders] = useState([]);
+  const [allPlatformOrders, setAllPlatformOrders] = useState([]);
   const [dateRange, setDateRange] = useState([
     dayjs().subtract(30, 'days'),
     dayjs()
@@ -178,7 +179,8 @@ const EcommerceProfit = () => {
     totalPlatformFee: 0,
     totalProfit: 0,
     grossProfit: 0,
-    netProfit: 0
+    netProfit: 0,
+    netProfitAllPlatforms: 0
   });
   const [feeSettings, setFeeSettings] = useState({
     platform: {},
@@ -186,6 +188,7 @@ const EcommerceProfit = () => {
     packaging: {}
   });
   const [ordersWithProfit, setOrdersWithProfit] = useState([]);
+  const [ordersWithProfitAllPlatforms, setOrdersWithProfitAllPlatforms] = useState([]);
 
   useEffect(() => {
     loadStores();
@@ -298,9 +301,57 @@ const EcommerceProfit = () => {
     };
   }, []);
 
+  const enrichOrdersWithProfit = (ordersList = []) => {
+    if (!ordersList.length) return [];
+
+    return ordersList.map(order => {
+      const revenue = parseFloat(order.totalAmount) || parseFloat(order.subtotal) || 0;
+      const importCost = (() => {
+        if (order.importCost !== undefined && order.importCost !== null) {
+          return parseFloat(order.importCost) || 0;
+        }
+        const perUnitImport = parseFloat(order.importPrice) || 0;
+        return perUnitImport * (order.quantity || 1);
+      })();
+
+      const explicitBreakdown = buildExplicitFeeBreakdown(order);
+      const configuredFees = calculateConfiguredFees(order, revenue);
+      const combinedBreakdown = mergeBreakdowns(explicitBreakdown, configuredFees.breakdown);
+
+      const explicitFees = sumBreakdownValues(explicitBreakdown);
+      const settingsFees = configuredFees.totalAmount || sumBreakdownValues(configuredFees.breakdown);
+      const totalFees = sumBreakdownValues(combinedBreakdown);
+      const netProfit = revenue - importCost - totalFees;
+
+      const platformCost = sumByKeys(combinedBreakdown, PLATFORM_FEE_KEYS);
+      const externalCost = sumByKeys(combinedBreakdown, EXTERNAL_FEE_KEYS);
+      const packagingCost = sumByKeys(combinedBreakdown, PACKAGING_FEE_KEYS);
+
+      return {
+        ...order,
+        importCost,
+        explicitFees,
+        configuredFees,
+        settingsFees,
+        totalFees,
+        netProfit,
+        platformCost,
+        externalCost,
+        packagingCost,
+        feeBreakdown: combinedBreakdown,
+        explicitFeeBreakdown: explicitBreakdown,
+        configuredFeeBreakdown: configuredFees.breakdown
+      };
+    });
+  };
+
   useEffect(() => {
-    calculateOrdersWithProfit();
-  }, [filteredOrders, feeSettings]);
+    const enrichedFiltered = enrichOrdersWithProfit(filteredOrders);
+    setOrdersWithProfit(enrichedFiltered);
+
+    const enrichedAllPlatforms = enrichOrdersWithProfit(allPlatformOrders);
+    setOrdersWithProfitAllPlatforms(enrichedAllPlatforms);
+  }, [filteredOrders, allPlatformOrders, feeSettings]);
 
   const loadStores = () => {
     const storesRef = ref(database, 'stores');
@@ -429,8 +480,11 @@ const EcommerceProfit = () => {
     });
     
     let filtered = [];
+    const filteredResult = [];
+    const allPlatformResult = [];
+
     try {
-      filtered = orders.filter(order => {
+      orders.forEach(order => {
         try {
           const selectedStoreId = typeof selectedStore === 'object'
             ? selectedStore?.id
@@ -490,15 +544,23 @@ const EcommerceProfit = () => {
         }
       }
 
-          const passes = matchStore && matchPlatform && matchDate;
+          const passesWithoutPlatform = matchStore && matchDate;
+          if (passesWithoutPlatform) {
+            allPlatformResult.push(order);
+          }
+
+          const passes = passesWithoutPlatform && matchPlatform;
           
-          return passes;
+          if (passes) {
+            filteredResult.push(order);
+          }
         } catch (orderError) {
           console.error('❌ Error processing order:', order.orderId, orderError);
-          return false;
         }
       });
-    
+
+      filtered = filteredResult;
+
       console.log('✅ [EcommerceProfit] Filtered orders:', {
         filteredCount: filtered.length,
         orders: filtered.map(o => ({ orderId: o.orderId, platform: o.platform }))
@@ -509,6 +571,7 @@ const EcommerceProfit = () => {
     }
     
     setFilteredOrders(filtered);
+    setAllPlatformOrders(allPlatformResult);
   };
 
   const sumBreakdownValues = (breakdown = {}) => 
@@ -668,70 +731,29 @@ const EcommerceProfit = () => {
     };
   };
 
-  const calculateOrdersWithProfit = () => {
-    if (!filteredOrders.length) {
-      setOrdersWithProfit([]);
-      return;
-    }
-
-    const enriched = filteredOrders.map(order => {
-      const revenue = parseFloat(order.totalAmount) || parseFloat(order.subtotal) || 0;
-      const importCost = (() => {
-        if (order.importCost !== undefined && order.importCost !== null) {
-          return parseFloat(order.importCost) || 0;
-        }
-        const perUnitImport = parseFloat(order.importPrice) || 0;
-        return perUnitImport * (order.quantity || 1);
-      })();
-
-      const explicitBreakdown = buildExplicitFeeBreakdown(order);
-      const configuredFees = calculateConfiguredFees(order, revenue);
-      const combinedBreakdown = mergeBreakdowns(explicitBreakdown, configuredFees.breakdown);
-
-      const explicitFees = sumBreakdownValues(explicitBreakdown);
-      const settingsFees = configuredFees.totalAmount || sumBreakdownValues(configuredFees.breakdown);
-      const totalFees = sumBreakdownValues(combinedBreakdown);
-      const netProfit = revenue - importCost - totalFees;
-
-      const platformCost = sumByKeys(combinedBreakdown, PLATFORM_FEE_KEYS);
-      const externalCost = sumByKeys(combinedBreakdown, EXTERNAL_FEE_KEYS);
-      const packagingCost = sumByKeys(combinedBreakdown, PACKAGING_FEE_KEYS);
-
-      return {
-        ...order,
-        importCost,
-        explicitFees,
-        configuredFees,
-        settingsFees,
-        totalFees,
-        netProfit,
-        platformCost,
-        externalCost,
-        packagingCost,
-        feeBreakdown: combinedBreakdown,
-        explicitFeeBreakdown: explicitBreakdown,
-        configuredFeeBreakdown: configuredFees.breakdown
-      };
-    });
-
-    setOrdersWithProfit(enriched);
-  };
-
   const calculateStatistics = () => {
-    const sourceOrders = ordersWithProfit.length ? ordersWithProfit : filteredOrders;
+    const filteredSource = ordersWithProfit.length ? ordersWithProfit : filteredOrders;
+    const allSource = ordersWithProfitAllPlatforms.length ? ordersWithProfitAllPlatforms : allPlatformOrders;
 
-    const totalRevenue = sourceOrders.reduce((sum, order) =>
-      sum + (parseFloat(order.totalAmount) || 0), 0
-    );
-    const totalImportCost = sourceOrders.reduce((sum, order) =>
-      sum + (parseFloat(order.importCost) || 0), 0
-    );
-    const totalFees = sourceOrders.reduce((sum, order) =>
-      sum + (parseFloat(order.totalFees) || 0), 0
-    );
+    const sumRevenue = (ordersList) =>
+      ordersList.reduce((sum, order) =>
+        sum + (parseFloat(
+          order.totalAmount !== undefined ? order.totalAmount :
+          order.revenue !== undefined ? order.revenue :
+          order.subtotal !== undefined ? order.subtotal : 0
+        ) || 0), 0);
+
+    const totalRevenue = sumRevenue(filteredSource);
+    const totalImportCost = filteredSource.reduce((sum, order) => sum + (parseFloat(order.importCost) || 0), 0);
+    const totalFees = filteredSource.reduce((sum, order) => sum + (parseFloat(order.totalFees) || 0), 0);
 
     const grossProfit = totalRevenue - totalImportCost;
     const netProfit = grossProfit - totalFees;
+
+    const allRevenue = sumRevenue(allSource);
+    const allImportCost = allSource.reduce((sum, order) => sum + (parseFloat(order.importCost) || 0), 0);
+    const allFees = allSource.reduce((sum, order) => sum + (parseFloat(order.totalFees) || 0), 0);
+    const allNetProfit = (allRevenue - allImportCost) - allFees;
 
     setStatistics({
       totalRevenue,
@@ -739,7 +761,8 @@ const EcommerceProfit = () => {
       totalPlatformFee: totalFees,
       totalProfit: netProfit,
       grossProfit,
-      netProfit
+      netProfit,
+      netProfitAllPlatforms: allNetProfit
     });
   };
 

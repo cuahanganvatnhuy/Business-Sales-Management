@@ -80,6 +80,37 @@ const ManageOrdersTMDT = () => {
   const [expandedRowKeys, setExpandedRowKeys] = useState([]);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
+  const [orderToDelete, setOrderToDelete] = useState(null);
+
+  useEffect(() => {
+    const styleTag = document.createElement('style');
+    styleTag.id = 'manage-orders-tmdt-layout-style';
+    styleTag.innerHTML = `
+      .manage-orders-tmdt-layout :where(.css-dev-only-do-not-override-11mmrso).ant-btn {
+        font-size: 12px !important;
+        height: 32px !important;
+        padding: 0 15px !important;
+        border-radius: 6px !important;
+      }
+    `;
+    document.head.appendChild(styleTag);
+    const layoutContent = document.querySelector('.ant-layout-content');
+    layoutContent?.classList.add('manage-orders-tmdt-layout');
+
+    return () => {
+      document.head.removeChild(styleTag);
+      layoutContent?.classList.remove('manage-orders-tmdt-layout');
+    };
+  }, []);
+
+  const navButtonStyle = {
+    fontSize: 12,
+    fontWeight: 600,
+    height: 32,
+    borderRadius: 6,
+    padding: '0 15px'
+  };
 
   // Load orders from Firebase
   useEffect(() => {
@@ -251,9 +282,13 @@ const ManageOrdersTMDT = () => {
       await remove(orderRef);
       message.success('Đã xóa đơn hàng thành công!');
       setSelectedRowKeys(selectedRowKeys.filter(key => key !== record.id));
+      setDeleteConfirmVisible(false);
+      setOrderToDelete(null);
     } catch (error) {
       console.error('Error deleting order:', error);
       message.error('Lỗi khi xóa đơn hàng: ' + error.message);
+      setDeleteConfirmVisible(false);
+      setOrderToDelete(null);
     }
   };
 
@@ -963,14 +998,8 @@ const ManageOrdersTMDT = () => {
             label: 'Xóa',
             danger: true,
             onClick: () => {
-              Modal.confirm({
-                title: 'Xóa đơn hàng này?',
-                content: 'Bạn có chắc chắn muốn xóa đơn hàng này không?',
-                okText: 'Xóa',
-                cancelText: 'Hủy',
-                okButtonProps: { danger: true },
-                onOk: () => handleDeleteOrder(record)
-              });
+              setOrderToDelete(record);
+              setDeleteConfirmVisible(true);
             }
           }
         ];
@@ -998,11 +1027,11 @@ const ManageOrdersTMDT = () => {
   const totalQuantity = filteredOrders.reduce((sum, order) => sum + (order.quantity || 0), 0);
 
   return (
-    <div style={{ padding: '24px' }}>
+    <div style={{ padding: '5px' }}>
       {/* Header */}
       <Card 
         style={{ 
-          marginBottom: 24,
+          marginBottom: 12,
           borderRadius: 12,
           boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
         }}
@@ -1010,20 +1039,21 @@ const ManageOrdersTMDT = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <ShoppingOutlined style={{ fontSize: 32, color: '#007A33' }} />
           <div>
-            <h1 style={{ margin: 0, fontSize: 24, color: '#007A33' }}>Quản Lý Đơn Hàng TMĐT</h1>
+            <h1 className="page-title" style={{ margin: 0, color: '#007A33' }}>Quản Lý Đơn Hàng TMĐT</h1>
             <p style={{ margin: 0, color: '#666' }}>Quản lý các đơn hàng từ TMĐT, Bán Lẻ và Bán Sỉ</p>
           </div>
         </div>
       </Card>
 
       {/* Order Type Tabs */}
-      <div style={{ marginBottom: 24 }}>
+      <div style={{ marginBottom: 12 }}>
         <Space size="middle">
           <Button
             icon={<ShoppingOutlined />}
             size="large"
             type="primary"
             style={{
+              ...navButtonStyle,
               background: '#007A33',
               borderColor: '#007A33'
             }}
@@ -1035,6 +1065,7 @@ const ManageOrdersTMDT = () => {
             size="large"
             onClick={() => navigate('/orders/manage/retail')}
             style={{
+              ...navButtonStyle,
               borderColor: '#d9d9d9',
               background: 'white',
               color: '#666'
@@ -1047,6 +1078,7 @@ const ManageOrdersTMDT = () => {
             size="large"
             onClick={() => navigate('/orders/manage/wholesale')}
             style={{
+              ...navButtonStyle,
               borderColor: '#d9d9d9',
               background: 'white',
               color: '#666'
@@ -1146,7 +1178,6 @@ const ManageOrdersTMDT = () => {
               title="Tổng Doanh Thu"
               value={totalRevenue}
               precision={0}
-              suffix="₫"
               valueStyle={{ color: '#007A33' }}
               formatter={(value) => formatCurrency(value)}
             />
@@ -1158,7 +1189,6 @@ const ManageOrdersTMDT = () => {
               title="Tổng Lợi Nhuận"
               value={totalProfit}
               precision={0}
-              suffix="₫"
               valueStyle={{ color: totalProfit >= 0 ? '#52c41a' : '#ff4d4f' }}
               formatter={(value) => formatCurrency(value)}
             />
@@ -1540,6 +1570,26 @@ const ManageOrdersTMDT = () => {
           </div>
         )}
       </Modal>
+
+      {/* Modal confirm for delete single order */}
+      {orderToDelete && (
+        <Modal
+          title="⚠️ Xóa đơn hàng"
+          open={deleteConfirmVisible}
+          onOk={() => handleDeleteOrder(orderToDelete)}
+          onCancel={() => {
+            setDeleteConfirmVisible(false);
+            setOrderToDelete(null);
+          }}
+          okText="Xóa"
+          cancelText="Hủy"
+          okButtonProps={{ danger: true }}
+          centered
+        >
+          <p><strong>Xóa đơn hàng {orderToDelete.orderId || 'N/A'}?</strong></p>
+          <p>Bạn có chắc chắn muốn xóa đơn hàng này không? Hành động này không thể hoàn tác!</p>
+        </Modal>
+      )}
     </div>
   );
 };

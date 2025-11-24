@@ -470,44 +470,80 @@ const StaffManagement = () => {
     : null;
 
   return (
-    <div style={{ padding: 24 }}>
-      <Card
-        style={{ marginBottom: 16 }}
-        bodyStyle={{ padding: 20 }}
+    <div style={{ padding: 24, background: '#f5f5f5', minHeight: '100vh' }}>
+      <div
+        style={{
+          background: '#fff',
+          padding: '16px 24px',
+          borderRadius: 12,
+          boxShadow: '0 12px 30px rgba(5, 153, 0, 0.08)',
+          marginBottom: 16
+        }}
       >
-        <div style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: 16,
-          justifyContent: 'space-between',
-          alignItems: 'center'
-        }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: '50%',
+              background: '#e6f7e6',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            <UserAddOutlined style={{ fontSize: 20, color: '#0f9d58' }} />
+          </div>
           <div>
-            <Title level={3} style={{ margin: 0 }}>Quản Lý Tài Khoản Nhân Sự</Title>
+            <Title
+              level={2}
+              style={{ margin: 0, color: 'rgb(8 125 68)', fontWeight: 'bold', fontSize: 23 }}
+            >
+              Quản Lý Tài Khoản Nhân Sự
+            </Title>
             <Text type="secondary">
               Theo dõi tài khoản đăng nhập và phân quyền cho từng nhân sự
             </Text>
           </div>
-          <Space wrap>
-            <Input.Search
-              placeholder="Tìm theo tên, email, SĐT"
-              allowClear
-              onChange={(e) => setSearchText(e.target.value)}
-              style={{ width: 260 }}
-            />
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={openCreateModal}
-              style={{ background: '#0f9d58', borderColor: '#0f9d58' }}
-            >
-              Thêm tài khoản
-            </Button>
-          </Space>
         </div>
-      </Card>
+      </div>
 
-      <Card bodyStyle={{ padding: 0 }}>
+      <div
+        style={{
+          background: '#fff',
+          padding: 20,
+          borderRadius: 12,
+          boxShadow: '0 8px 24px rgba(0, 0, 0, 0.05)',
+          marginBottom: 16
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 16,
+            justifyContent: 'space-between',
+            alignItems: 'center'
+          }}
+        >
+          <Input.Search
+            placeholder="Tìm theo tên, email, SĐT"
+            allowClear
+            onChange={(e) => setSearchText(e.target.value)}
+            style={{ width: 300, flex: '1 1 280px' }}
+          />
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={openCreateModal}
+            style={{ background: '#0f9d58', borderColor: '#0f9d58' }}
+          >
+            Thêm tài khoản
+          </Button>
+        </div>
+      </div>
+
+      <Card bodyStyle={{ padding: 0 }} style={{ borderRadius: 12, boxShadow: '0 8px 24px rgba(0, 0, 0, 0.05)' }}>
         <Table
           rowKey="id"
           loading={loading}

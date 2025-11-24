@@ -22,29 +22,81 @@ export const validateStock = (items, products, sellingProducts = null) => {
       }
     }
     
-    const product = products.find(p => p.id === actualProductId);
+    let product = products.find(p => p.id === actualProductId);
+    
+    // Nếu không tìm thấy bằng ID, thử tìm bằng SKU (quan trọng nhất)
+    if (!product && item.sku) {
+      product = products.find(p => {
+        if (!p.sku) return false;
+        // So sánh SKU không phân biệt hoa thường và bỏ qua khoảng trắng
+        const normalizeSku = (sku) => (sku || '').toUpperCase().trim().replace(/\s+/g, '');
+        return normalizeSku(p.sku) === normalizeSku(item.sku);
+      });
+      
+      if (product) {
+        console.log('✅ Tìm thấy product bằng SKU:', {
+          itemSku: item.sku,
+          productSku: product.sku,
+          productId: product.id,
+          productName: product.name,
+          stock: product.stock
+        });
+      }
+    }
+    
+    // Nếu vẫn không tìm thấy, thử tìm bằng tên sản phẩm
+    if (!product && item.productName) {
+      const searchName = item.productName.split('(')[0].trim().toLowerCase();
+      product = products.find(p => {
+        if (!p.name) return false;
+        const productName = p.name.toLowerCase();
+        return productName === searchName || productName.includes(searchName) || searchName.includes(productName);
+      });
+      
+      if (product) {
+        console.log('✅ Tìm thấy product bằng tên:', {
+          itemName: item.productName,
+          productName: product.name,
+          productId: product.id,
+          stock: product.stock
+        });
+      }
+    }
+    
     if (!product) {
+      // Không tìm thấy product - báo lỗi nhưng vẫn tiếp tục kiểm tra các sản phẩm khác
       errors.push(
-        `Sản phẩm "${item.productName}" không tồn tại trong kho! ` +
-        `ProductID: ${actualProductId || 'undefined'}. ` +
+        `❌ Sản phẩm "${item.productName}" (SKU: ${item.sku || 'N/A'}) không tồn tại trong kho! ` +
         `Vui lòng vào /selling-products và đồng bộ lại sản phẩm này.`
       );
       console.error('❌ Product not found:', {
         itemProductId: item.productId,
         actualProductId: actualProductId,
         itemProductName: item.productName,
+        itemSku: item.sku,
         availableProductIds: products.map(p => p.id).slice(0, 5),
-        totalProducts: products.length
+        totalProducts: products.length,
+        availableSkus: products.filter(p => p.sku).map(p => p.sku).slice(0, 10)
       });
       continue;
     }
     
     const availableStock = product.stock || 0;
-    if (item.quantity > availableStock) {
+    
+    // Kiểm tra stock = 0 trước (quan trọng nhất)
+    if (availableStock === 0) {
       errors.push(
-        `Sản phẩm "${product.name}" không đủ hàng! ` +
+        `🚨 Sản phẩm "${product.name || item.productName}" (SKU: ${product.sku || item.sku || 'N/A'}) ĐÃ HẾT HÀNG! ` +
+        `Tồn kho: 0 ${product.unit || 'lỗi'}. ` +
+        `Không thể tạo đơn hàng với sản phẩm này!`
+      );
+    } else if (item.quantity > availableStock) {
+      // Stock > 0 nhưng không đủ
+      errors.push(
+        `⚠️ Sản phẩm "${product.name || item.productName}" (SKU: ${product.sku || item.sku || 'N/A'}) không đủ hàng! ` +
         `Tồn kho: ${availableStock} ${product.unit || 'lỗi'}, ` +
-        `Yêu cầu: ${item.quantity} ${product.unit || 'lỗi'}`
+        `Yêu cầu: ${item.quantity} ${product.unit || 'lỗi'}. ` +
+        `Còn thiếu: ${(item.quantity - availableStock).toFixed(2)} ${product.unit || 'lỗi'}`
       );
     }
   }
@@ -143,11 +195,19 @@ export const checkStockAvailability = (productId, quantity, products, sellingPro
   const stock = product.stock || 0;
   const available = quantity <= stock;
   
+  // Thông báo rõ ràng hơn cho từng trường hợp
+  let messageText = '';
+  if (stock === 0) {
+    messageText = `🚨 ĐÃ HẾT HÀNG! Tồn kho: 0 ${product.unit || 'lỗi'}. Không thể tạo đơn hàng!`;
+  } else if (!available) {
+    messageText = `⚠️ Không đủ hàng! Tồn kho chỉ còn: ${stock} ${product.unit || 'lỗi'}, yêu cầu: ${quantity} ${product.unit || 'lỗi'}`;
+  } else {
+    messageText = `✅ Tồn kho: ${stock} ${product.unit || 'lỗi'}`;
+  }
+  
   return {
     available,
     stock,
-    message: available 
-      ? `Tồn kho: ${stock} ${product.unit || 'lỗi'}`
-      : `Không đủ hàng! Tồn kho chỉ còn: ${stock} ${product.unit || 'lỗi'}`
+    message: messageText
   };
 };

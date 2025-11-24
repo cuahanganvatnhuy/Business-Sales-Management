@@ -405,7 +405,7 @@ const RetailProfit = () => {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
           <ShopOutlined style={{ fontSize: '24px', color: '#127e03ff' }} />
-          <Title level={2} style={{ margin: 0, color: '#127e03ff' ,fontWeight: 'bold'}}>Lợi Nhuận Đơn Lẻ</Title>
+          <Title level={2} className="page-title" style={{ margin: 0, color: '#127e03ff' ,fontWeight: 'bold'}}>Lợi Nhuận Đơn Lẻ</Title>
         </div>
         <Text type="secondary">Phân tích lợi nhuận từ các đơn hàng bán lẻ</Text>
       </div>

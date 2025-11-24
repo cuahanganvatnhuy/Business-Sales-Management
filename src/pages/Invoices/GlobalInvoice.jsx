@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { database } from '../../services/firebase.service';
 import { ref, onValue, query, orderByChild } from 'firebase/database';
 import { 
-  Card, 
   DatePicker, 
   Button, 
   Typography, 
@@ -11,7 +10,7 @@ import {
   Row, 
   Col,
   message,
-  Divider 
+  Card
 } from 'antd';
 import {
   FileTextOutlined,
@@ -499,19 +498,48 @@ const GlobalInvoice = () => {
 
 
   return (
-    <div style={{ padding: '24px' }}>
-      <Card>
-        <Space direction="vertical" size="large" style={{ width: '100%' }}>
-          {/* Header */}
+    <div style={{ padding: '24px', background: '#f5f5f5', minHeight: '100vh' }}>
+      <div
+        style={{
+          background: '#fff',
+          padding: '16px 24px',
+          borderRadius: 12,
+          boxShadow: '0 12px 30px rgba(5, 153, 0, 0.08)',
+          marginBottom: 24
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: '50%',
+              background: '#e6f7e6',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            <FileTextOutlined style={{ fontSize: 18, color: '#0f9d58',fontWeight: 600}} />
+          </div>
           <div>
-            <Title level={2}>
-              <FileTextOutlined style={{ marginRight: 8 }} />
+            <Title level={2} style={{ margin: 0, color: 'rgb(8 125 68)', fontWeight: 'bold', fontSize: 23 }}>
               Hóa Đơn Toàn Bộ
             </Title>
             <Text type="secondary">Xem và in hóa đơn tổng hợp cho tất cả cửa hàng</Text>
           </div>
+        </div>
+      </div>
 
-          <Divider />
+      <div
+        style={{
+          background: '#fff',
+          padding: '24px',
+          borderRadius: 12,
+          boxShadow: '0 10px 30px rgba(15, 157, 88, 0.08)'
+        }}
+      >
+        <Space direction="vertical" size="large" style={{ width: '100%' }}>
 
           {/* Date Range Selection */}
           <Card size="small" style={{ background: '#f5f7fa' }}>
@@ -758,7 +786,7 @@ const GlobalInvoice = () => {
             </Card>
           )}
         </Space>
-      </Card>
+      </div>
     </div>
   );
 };

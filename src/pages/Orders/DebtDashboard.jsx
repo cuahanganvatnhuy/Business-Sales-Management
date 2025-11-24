@@ -165,14 +165,14 @@ const DebtDashboard = () => {
     : 0;
 
   return (
-    <div style={{ padding: '24px' }}>
+    <div style={{ padding: '5px' }}>
       {/* Header */}
       <Card style={{ marginBottom: 24, borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <DollarOutlined style={{ fontSize: 32, color: '#007A33' }} />
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <h1 style={{ margin: 0, fontSize: 24, color: '#007A33' }}>Dashboard Công Nợ</h1>
+              <h1 className="page-title" style={{ margin: 0, color: '#007A33' }}>Dashboard Công Nợ</h1>
               {selectedStore && (
                 <Tag color={selectedStore.id === 'all' ? 'blue' : 'green'} style={{ fontSize: '14px', padding: '4px 12px' }}>
                   {selectedStore.id === 'all' ? '🏪 Toàn Bộ Cửa Hàng' : `📍 ${selectedStore.name}`}

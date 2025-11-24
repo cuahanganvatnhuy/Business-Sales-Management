@@ -11,7 +11,8 @@ import {
   Divider,
   Table,
   Tag,
-  Button
+  Button,
+  Tooltip
 } from 'antd';
 import {
   DollarOutlined,
@@ -19,7 +20,8 @@ import {
   FallOutlined,
   ShoppingCartOutlined,
   ShopOutlined,
-  FileExcelOutlined
+  FileExcelOutlined,
+  QuestionCircleOutlined
 } from '@ant-design/icons';
 import { Line, Column, Pie } from '@ant-design/plots';
 import dayjs from 'dayjs';
@@ -65,8 +67,20 @@ const ProfitOverview = () => {
   const [channelData, setChannelData] = useState([]);
   const [retailExternalSettings, setRetailExternalSettings] = useState({});
   const [wholesaleExternalSettings, setWholesaleExternalSettings] = useState({});
+  const [platformFeeSettings, setPlatformFeeSettings] = useState({});
+  const [externalCostSettings, setExternalCostSettings] = useState({});
+  const [packagingCostSettings, setPackagingCostSettings] = useState({});
   const [selectedChannel, setSelectedChannel] = useState('all');
   const [filteredOrdersState, setFilteredOrdersState] = useState([]);
+
+  const renderStatTitle = (label, description) => (
+    <Space size={4}>
+      <span>{label}</span>
+      <Tooltip title={description} placement="top">
+        <QuestionCircleOutlined style={{ color: '#999' }} />
+      </Tooltip>
+    </Space>
+  );
 
   useEffect(() => {
     loadStores();
@@ -76,6 +90,9 @@ const ProfitOverview = () => {
   useEffect(() => {
     const retailRef = ref(database, 'retailExternalCostSettings');
     const wholesaleRef = ref(database, 'wholesaleExternalCostSettings');
+    const platformRef = ref(database, 'platformFeeSettings');
+    const externalRef = ref(database, 'externalCostSettings');
+    const packagingRef = ref(database, 'packagingCostSettings');
 
     onValue(retailRef, (snapshot) => {
       setRetailExternalSettings(snapshot.val() || {});
@@ -83,6 +100,18 @@ const ProfitOverview = () => {
 
     onValue(wholesaleRef, (snapshot) => {
       setWholesaleExternalSettings(snapshot.val() || {});
+    });
+
+    onValue(platformRef, (snapshot) => {
+      setPlatformFeeSettings(snapshot.val() || {});
+    });
+
+    onValue(externalRef, (snapshot) => {
+      setExternalCostSettings(snapshot.val() || {});
+    });
+
+    onValue(packagingRef, (snapshot) => {
+      setPackagingCostSettings(snapshot.val() || {});
     });
   }, []);
 
@@ -100,7 +129,7 @@ const ProfitOverview = () => {
       });
       setChannelData([]);
     }
-  }, [orders, dateRange, selectedStore, selectedChannel, retailExternalSettings, wholesaleExternalSettings]);
+  }, [orders, dateRange, selectedStore, selectedChannel, retailExternalSettings, wholesaleExternalSettings, platformFeeSettings, externalCostSettings, packagingCostSettings]);
 
   const loadStores = () => {
     const storesRef = ref(database, 'stores');
@@ -197,7 +226,7 @@ const ProfitOverview = () => {
     order.store ||
     order.storeKey ||
     order.storeName ||
-    '';
+    'default';
 
   const calculateExternalFromSettings = (settingsRoot, order, revenue) => {
     const storeKey = getStoreKey(order);
@@ -222,15 +251,133 @@ const ProfitOverview = () => {
     return total;
   };
 
+  const getPlatformVariations = (platformRaw = '') => {
+    const lower = platformRaw.toLowerCase();
+    const variations = [platformRaw, lower];
+
+    if (lower.includes('tiktok')) {
+      variations.push('TikTok Shop', 'tiktok', 'tik tok');
+    } else if (lower.includes('shopee')) {
+      variations.push('Shopee');
+    } else if (lower.includes('lazada')) {
+      variations.push('Lazada');
+    } else if (lower.includes('sendo')) {
+      variations.push('Sendo');
+    } else if (lower.includes('facebook') || lower.includes('fb')) {
+      variations.push('Facebook Shop');
+    } else if (lower.includes('zalo')) {
+      variations.push('Zalo Shop');
+    }
+
+    return variations;
+  };
+
+  const getPlatformConfigs = (platformRaw, storeKey) => {
+    const platformData = platformFeeSettings || {};
+    const variations = getPlatformVariations(platformRaw);
+
+    for (const name of variations) {
+      if (platformData[name] && platformData[name][storeKey]) {
+        const storeData = platformData[name][storeKey];
+        return storeData.feeConfigs || storeData;
+      }
+    }
+    return null;
+  };
+
+  const calculateEcommerceFees = (order, revenue) => {
+    if (!isEcommerceOrder(order)) return 0;
+
+    // If order already has totalFees calculated (from EcommerceProfit page), use it
+    if (order.totalFees !== undefined && order.totalFees !== null) {
+      const fees = parseFloat(order.totalFees) || 0;
+      console.log('📊 Using existing totalFees from order:', { orderId: order.orderId, totalFees: fees });
+      return fees;
+    }
+
+    const storeKey = getStoreKey(order);
+    let totalFees = 0;
+
+    // 1. Calculate platform fees
+    const platformRaw = order.platform || order.ecommercePlatform || order.source || '';
+    const platformConfigs = getPlatformConfigs(platformRaw, storeKey);
+    if (platformConfigs) {
+      Object.entries(platformConfigs).forEach(([key, config]) => {
+        if (!config || config.enabled !== true) return;
+        const value = parseFloat(config.value) || 0;
+        if (!value) return;
+        const amount = config.type === 'percentage'
+          ? (revenue * value) / 100
+          : value;
+        totalFees += amount;
+      });
+    }
+
+    // 2. Calculate external costs
+    const externalConfigs = externalCostSettings?.[storeKey];
+    if (externalConfigs) {
+      const costs = externalConfigs.costConfigs || externalConfigs;
+      Object.entries(costs || {}).forEach(([key, config]) => {
+        if (typeof config === 'object') {
+          if (!config.enabled) return;
+          const amount = parseFloat(config.value) || 0;
+          totalFees += amount;
+        } else if (config) {
+          totalFees += parseFloat(config) || 0;
+        }
+      });
+    }
+
+    // 3. Calculate packaging costs
+    const packagingConfigs = packagingCostSettings?.[storeKey];
+    if (packagingConfigs) {
+      Object.values(packagingConfigs).forEach(packages => {
+        if (Array.isArray(packages)) {
+          packages.forEach(pkg => {
+            if (pkg && pkg.cost) {
+              totalFees += parseFloat(pkg.cost) || 0;
+            }
+          });
+        } else if (typeof packages === 'object' && packages !== null) {
+          Object.values(packages).forEach(pkg => {
+            if (pkg && pkg.cost) {
+              totalFees += parseFloat(pkg.cost) || 0;
+            }
+          });
+        }
+      });
+    }
+
+    return totalFees;
+  };
+
 const calculateNetForOrder = (order) => {
   const revenue = getOrderRevenue(order);
   const baseCost = getOrderCost(order);
   let extraCost = 0;
+  let platformFees = 0;
 
-  if (isRetailOrder(order)) {
+  if (isEcommerceOrder(order)) {
+    // Calculate all fees for ecommerce orders (platform fees + external costs + packaging costs)
+    platformFees = calculateEcommerceFees(order, revenue);
+  } else if (isRetailOrder(order)) {
     extraCost = calculateExternalFromSettings(retailExternalSettings, order, revenue);
   } else if (isWholesaleOrder(order)) {
     extraCost = calculateExternalFromSettings(wholesaleExternalSettings, order, revenue);
+  }
+
+  // Net profit = revenue - base cost - extra cost - platform fees
+  const netProfit = revenue - baseCost - extraCost - platformFees;
+
+  if (isEcommerceOrder(order)) {
+    console.log('📦 Ecommerce order calculated:', {
+      orderId: order.orderId,
+      revenue,
+      baseCost,
+      platformFees,
+      netProfit,
+      grossProfit: revenue - baseCost
+    });
   }
 
   return {
@@ -238,7 +385,8 @@ const calculateNetForOrder = (order) => {
     revenue,
     baseCost,
     extraCost,
-    netProfit: revenue - baseCost - extraCost
+    platformFees,
+    netProfit
   };
 };
 
@@ -271,7 +419,7 @@ const calculateNetForOrder = (order) => {
     });
 
     const totalCost = filteredOrders.reduce((sum, order) => {
-      return sum + order.baseCost + order.extraCost;
+      return sum + order.baseCost + order.extraCost + (order.platformFees || 0);
     }, 0);
     const profitMargin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
 
@@ -290,15 +438,13 @@ const calculateNetForOrder = (order) => {
 
     const calculateChannelNetProfit = (orders, type) => {
       return orders.reduce((sum, o) => {
-        if (type === 'retail' || type === 'wholesale') {
-          return sum + o.netProfit;
-        }
-        return sum + (o.revenue - o.baseCost);
+        // All channels now use netProfit which includes all costs
+        return sum + o.netProfit;
       }, 0);
     };
 
     setChannelData([
-      { channel: 'TMĐT', profit: calculateChannelNetProfit(ecommerceOrders, 'ecommerce'), count: ecommerceOrders.length },
+      { channel: 'Thương Mại Điện Tử ', profit: calculateChannelNetProfit(ecommerceOrders, 'ecommerce'), count: ecommerceOrders.length },
       { channel: 'Bán Lẻ', profit: calculateChannelNetProfit(retailOrders, 'retail'), count: retailOrders.length },
       { channel: 'Bán Sỉ', profit: calculateChannelNetProfit(wholesaleOrders, 'wholesale'), count: wholesaleOrders.length }
     ]);
@@ -418,9 +564,9 @@ const calculateNetForOrder = (order) => {
               style={{ width: 200 }}
             >
               <Option value="all">Tất cả kênh</Option>
-              <Option value="ecommerce">TMĐT</Option>
-              <Option value="retail">Bán Lẻ</Option>
-              <Option value="wholesale">Bán Sỉ</Option>
+              <Option value="ecommerce">Đơn TMĐT</Option>
+              <Option value="retail">Đơn Bán Lẻ</Option>
+              <Option value="wholesale">Đơn Bán Sỉ</Option>
             </Select>
           </div>
           <Button
@@ -438,7 +584,7 @@ const calculateNetForOrder = (order) => {
         <Col span={6}>
           <Card>
             <Statistic
-              title="Tổng doanh thu"
+              title={renderStatTitle('Tổng doanh thu', 'Tổng tiền bán hàng đã ghi nhận trong phạm vi thời gian và bộ lọc hiện tại.')}
               value={statistics.totalRevenue}
               precision={0}
               valueStyle={{ color: '#1890ff' }}
@@ -450,7 +596,7 @@ const calculateNetForOrder = (order) => {
         <Col span={6}>
           <Card>
             <Statistic
-              title="Tổng chi phí"
+              title={renderStatTitle('Tổng chi phí', 'Bao gồm giá nhập hàng, phí sàn TMĐT và mọi chi phí bên ngoài/đóng gói được cấu hình.')}
               value={statistics.totalCost}
               precision={0}
               valueStyle={{ color: '#ff4d4f' }}

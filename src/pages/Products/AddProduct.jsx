@@ -579,7 +579,7 @@ const AddProduct = () => {
   }
 
   return (
-    <div style={{ padding: '24px' }}>
+    <div style={{ padding: '10px' }}>
       <Spin spinning={loading}>
         <Card
           title={
