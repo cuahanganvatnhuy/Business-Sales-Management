@@ -73,12 +73,20 @@ button:focus-visible {
     /* text-align: center; */
 }
 body.app-zoom-80 {
-  zoom: 0.8;
+  zoom: 0.82;
 }
-@supports not (zoom: 0.8) {
+@supports not (zoom: 0.82) {
   body.app-zoom-80 #root {
-    transform: scale(0.8);
+    transform: scale(0.82);
     transform-origin: top left;
     width: 125%;
   }
+}
+
+aside.ant-layout-sider.ant-layout-sider-dark.css-dev-only-do-not-override-11mmrso {
+    height: 100% !important;
+}
+span.ant-menu-title-content {
+    font-family: sans-serif;
+ 
 }
