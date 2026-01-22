@@ -46,7 +46,7 @@ const Login = () => {
       <Card className="login-card">
         <div className="login-header" style={{ textAlign: 'center', marginBottom: '24px' }}>
           <img 
-            src="/logo6.png" 
+            src="/logoxanen.png" 
             alt="PMQLDH Logo" 
             style={{ 
               maxWidth: '350px', 
@@ -102,7 +102,8 @@ const Login = () => {
         </Form>
 
         <div className="login-footer">
-          <p>2026 AP ERP – Phúc Hoàng Technology. All rights reserved.</p>
+          {/* <p>2026 AP ERP – Phúc Hoàng Technology. All rights reserved.</p> */}
+             <p>2026 AP ERP Technology. All rights reserved.</p>
         </div>
       </Card>
     </div>
