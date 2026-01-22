@@ -1,14 +1,7 @@
-/* Animated gradient background */
-@keyframes gradientShift {
-  0% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
-  100% {
-    background-position: 0% 50%;
-  }
+/* Modern background with subtle pattern */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .login-container {
@@ -16,31 +9,40 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  background: linear-gradient(
-    135deg,
-    #007A33 0%,
-    #006838 25%,
-    #00a046 50%,
-    #007A33 75%,
-    #006838 100%
-  );
-  background-size: 400% 400%;
-  animation: gradientShift 15s ease infinite;
+  background-color: #f8f9fa;
+  background-image: 
+    radial-gradient(circle at 10% 20%, rgba(0, 122, 51, 0.08) 0%, transparent 20%),
+    radial-gradient(circle at 90% 80%, rgba(0, 160, 70, 0.08) 0%, transparent 20%),
+    linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
   padding: 20px;
   position: relative;
   overflow: hidden;
+  animation: fadeIn 0.6s ease-out;
 }
 
-/* Floating particles effect */
+/* Decorative elements */
 .login-container::before {
   content: '';
   position: absolute;
-  width: 200%;
+  top: -50%;
+  right: -50%;
+  width: 80%;
   height: 200%;
-  background-image: 
-    radial-gradient(circle, rgba(255, 255, 255, 0.1) 1px, transparent 1px);
-  background-size: 50px 50px;
-  animation: particleFloat 20s linear infinite;
+  background: linear-gradient(135deg, rgba(0, 122, 51, 0.1) 0%, rgba(0, 160, 70, 0.1) 50%, transparent 100%);
+  transform: rotate(15deg);
+  z-index: 0;
+}
+
+.login-container::after {
+  content: '';
+  position: absolute;
+  bottom: -50%;
+  left: -50%;
+  width: 80%;
+  height: 200%;
+  background: linear-gradient(-45deg, rgba(0, 122, 51, 0.1) 0%, rgba(0, 160, 70, 0.1) 50%, transparent 100%);
+  transform: rotate(-15deg);
+  z-index: 0;
 }
 
 @keyframes particleFloat {
@@ -66,17 +68,25 @@
 
 .login-card {
   width: 100%;
-  max-width: 420px;
+  max-width: 450px;
   box-shadow: 
-    0 20px 60px rgba(0, 0, 0, 0.3),
-    0 0 100px rgba(102, 126, 234, 0.2);
-  border-radius: 20px;
+    0 15px 50px rgba(0, 0, 0, 0.08),
+    0 5px 15px rgba(0, 0, 0, 0.05);
+  border-radius: 16px;
   overflow: hidden;
-  backdrop-filter: blur(10px);
-  background: rgba(255, 255, 255, 0.95) !important;
+  background: white !important;
   animation: cardSlideIn 0.6s ease-out;
   position: relative;
   z-index: 1;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.login-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 
+    0 20px 60px rgba(0, 0, 0, 0.1),
+    0 10px 30px rgba(0, 0, 0, 0.05);
 }
 
 .login-card::before {
@@ -86,7 +96,8 @@
   left: 0;
   right: 0;
   height: 4px;
-  background: linear-gradient(90deg, #667eea, #764ba2, #f093fb);
+  background: linear-gradient(90deg, #007A33, #00a046);
+  box-shadow: 0 2px 10px rgba(0, 122, 51, 0.3);
 }
 
 /* Header styling */

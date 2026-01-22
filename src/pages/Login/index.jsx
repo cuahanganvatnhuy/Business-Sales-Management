@@ -44,9 +44,17 @@ const Login = () => {
   return (
     <div className="login-container">
       <Card className="login-card">
-        <div className="login-header">
-          <h1>📊 PMQLDH</h1>
-          <p>Hệ thống Quản lý Kinh doanh</p>
+        <div className="login-header" style={{ textAlign: 'center', marginBottom: '24px' }}>
+          <img 
+            src="/logo6.png" 
+            alt="PMQLDH Logo" 
+            style={{ 
+              maxWidth: '350px', 
+              height: 'auto',
+              marginBottom: '16px'
+            }} 
+          />
+          <p style={{ margin: 0, fontSize: '16px', color: '#666' }}>Hệ thống Quản lý Kinh doanh</p>
         </div>
         
         <Form
@@ -94,7 +102,7 @@ const Login = () => {
         </Form>
 
         <div className="login-footer">
-          <p>© 2025 PMQLDH. All rights reserved.</p>
+          <p>2026 AP ERP – Phúc Hoàng Technology. All rights reserved.</p>
         </div>
       </Card>
     </div>
