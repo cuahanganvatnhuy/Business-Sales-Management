@@ -1,0 +1,232 @@
+/* Products Page Styles */
+
+.add-product-page,
+.manage-products-page {
+  width: 100%;
+  max-width: 100%;
+}
+
+/* Stock Badge */
+.stock-badge {
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.stock-badge.low {
+  background: #fff7e6;
+  color: #fa8c16;
+  border: 1px solid #ffd591;
+}
+
+.stock-badge.out {
+  background: #fff1f0;
+  color: #ff4d4f;
+  border: 1px solid #ffccc7;
+}
+
+/* Form Styling */
+.ant-form-item-label > label {
+  font-weight: 500;
+}
+
+/* Card Headers */
+.ant-card-head {
+  background: linear-gradient(135deg, #f5f7fa 0%, #ffffff 100%);
+  border-bottom: 2px solid #007A33;
+}
+
+.ant-card-head-title {
+  font-weight: 600;
+  color: #007A33;
+}
+
+/* Table Styling */
+.ant-table-thead > tr > th {
+  background: #007A33 !important;
+  color: white !important;
+  font-weight: 600;
+  text-align: center;
+}
+
+.ant-table-tbody > tr:hover > td {
+  background: #f0f9ff !important;
+}
+
+/* Buttons */
+.ant-btn-primary {
+  background: #007A33;
+  border-color: #007A33;
+}
+
+.ant-btn-primary:hover {
+  background: #00a046;
+  border-color: #00a046;
+}
+
+/* Stats Cards */
+.ant-statistic-title {
+  color: #666;
+  font-size: 14px;
+}
+
+.ant-statistic-content {
+  font-size: 24px;
+  font-weight: 700;
+}
+
+/* Modal Styling */
+.ant-modal-header {
+  background: linear-gradient(135deg, #007A33 0%, #00a046 100%);
+}
+
+.ant-modal-title {
+  color: white !important;
+  font-weight: 600;
+}
+
+.ant-modal-close {
+  color: white;
+}
+
+.ant-modal-close:hover {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* Input Focus */
+.ant-input:focus,
+.ant-input-number:focus,
+.ant-select-focused .ant-select-selector {
+  border-color: #007A33 !important;
+  box-shadow: 0 0 0 2px rgba(0, 122, 51, 0.1) !important;
+}
+
+/* Checkbox */
+.ant-checkbox-checked .ant-checkbox-inner {
+  background-color: #007A33;
+  border-color: #007A33;
+}
+
+/* Tags */
+.ant-tag {
+  font-weight: 500;
+  padding: 4px 12px;
+}
+
+/* Empty State */
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+}
+
+.empty-state i {
+  font-size: 64px;
+  color: #d9d9d9;
+  margin-bottom: 16px;
+}
+
+.empty-state h3 {
+  font-size: 18px;
+  color: #666;
+  margin-bottom: 8px;
+}
+
+.empty-state p {
+  color: #999;
+  margin-bottom: 24px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .add-product-page .ant-form-item,
+  .manage-products-page .ant-form-item {
+    margin-bottom: 16px;
+  }
+
+  .ant-table {
+    font-size: 12px;
+  }
+
+  .ant-btn {
+    padding: 4px 8px;
+    font-size: 12px;
+  }
+}
+
+/* Loading Spinner */
+.ant-spin-nested-loading {
+  min-height: 200px;
+}
+
+/* Pagination */
+.ant-pagination {
+  margin-top: 24px;
+  text-align: center;
+}
+
+.ant-pagination-item-active {
+  background: #007A33;
+  border-color: #007A33;
+}
+
+.ant-pagination-item-active a {
+  color: white;
+}
+
+/* Search Input */
+.ant-input-affix-wrapper:focus,
+.ant-input-affix-wrapper-focused {
+  border-color: #007A33;
+  box-shadow: 0 0 0 2px rgba(0, 122, 51, 0.1);
+}
+
+/* Select Dropdown */
+.ant-select-dropdown {
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.ant-select-item-option-selected {
+  background-color: rgba(0, 122, 51, 0.1) !important;
+  color: #007A33 !important;
+  font-weight: 600;
+}
+
+/* Message & Notification */
+.ant-message-notice-content {
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.ant-message-success .anticon {
+  color: #52c41a;
+}
+
+.ant-message-error .anticon {
+  color: #ff4d4f;
+}
+
+/* Action Buttons in Table */
+.ant-table-tbody .ant-btn {
+  margin: 0 4px;
+}
+
+.ant-table-tbody .ant-btn-primary {
+  background: #007A33;
+}
+
+.ant-table-tbody .ant-btn-primary:hover {
+  background: #00a046;
+}
+
+/* Card Shadows */
+.ant-card {
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border: none;
+}
+
+.ant-card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  transition: all 0.3s;
+}

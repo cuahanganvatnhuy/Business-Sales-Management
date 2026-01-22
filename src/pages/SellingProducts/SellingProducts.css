@@ -1,0 +1,300 @@
+.selling-products-page {
+  padding: 12px;
+  background: #f0f2f5;
+  min-height: 100vh;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.page-header h1 {
+  font-size: 28px;
+  font-weight: 600;
+  color: #007A33;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.page-header h1 .anticon {
+  font-size: 32px;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 12px;
+}
+
+.action-buttons button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 20px;
+  font-weight: 500;
+  border-radius: 8px;
+  transition: all 0.3s;
+}
+
+.action-buttons button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 122, 51, 0.2);
+}
+
+/* Stats Cards */
+.ant-statistic {
+  padding: 8px 0;
+}
+
+.ant-statistic-title {
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 8px;
+}
+
+.ant-statistic-content {
+  font-size: 28px;
+  font-weight: 600;
+}
+
+.ant-statistic .anticon {
+  margin-right: 8px;
+}
+
+.ant-card {
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s;
+}
+
+.ant-card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+/* Table Styles */
+.ant-table {
+  font-size: 14px;
+}
+
+.ant-table-thead > tr > th {
+  background: linear-gradient(135deg, #007A33 0%, #005c26 100%);
+  color: white;
+  font-weight: 600;
+  padding: 16px;
+  border: none;
+}
+
+.ant-table-tbody > tr {
+  transition: all 0.2s;
+}
+
+.ant-table-tbody > tr:hover {
+  background: #f0f9ff;
+}
+
+.ant-table-tbody > tr > td {
+  padding: 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+/* Status Tags */
+.ant-tag {
+  padding: 4px 12px;
+  font-size: 13px;
+  border-radius: 6px;
+  border: none;
+  font-weight: 500;
+}
+
+/* Buttons */
+.ant-btn {
+  border-radius: 6px;
+  font-weight: 500;
+  transition: all 0.3s;
+}
+
+.ant-btn-primary {
+  background: #007A33;
+  border-color: #007A33;
+}
+
+.ant-btn-primary:hover {
+  background: #005c26;
+  border-color: #005c26;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 122, 51, 0.3);
+}
+
+.ant-btn-danger {
+  background: #ff4d4f;
+  border-color: #ff4d4f;
+}
+
+.ant-btn-danger:hover {
+  background: #ff7875;
+  border-color: #ff7875;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(255, 77, 79, 0.3);
+}
+
+/* Modal Styles */
+.ant-modal-header {
+  background: linear-gradient(135deg, #007A33 0%, #005c26 100%);
+  border-radius: 12px 12px 0 0;
+  padding: 20px 24px;
+}
+
+.ant-modal-title {
+  color: white;
+  font-size: 18px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ant-modal-body {
+  padding: 24px;
+}
+
+.ant-modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid #f0f0f0;
+}
+
+/* Form Styles */
+.ant-form-item-label > label {
+  font-weight: 500;
+  color: #333;
+}
+
+.ant-input,
+.ant-input-number,
+.ant-select-selector,
+.ant-input-number-input {
+  border-radius: 6px;
+  border: 1px solid #d9d9d9;
+  transition: all 0.3s;
+}
+
+.ant-input:focus,
+.ant-input-number:focus,
+.ant-select-focused .ant-select-selector {
+  border-color: #007A33;
+  box-shadow: 0 0 0 2px rgba(0, 122, 51, 0.1);
+}
+
+.ant-input-number {
+  width: 100%;
+}
+
+/* Scrollbar */
+.ant-table-body::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.ant-table-body::-webkit-scrollbar-track {
+  background: #f0f0f0;
+  border-radius: 4px;
+}
+
+.ant-table-body::-webkit-scrollbar-thumb {
+  background: #007A33;
+  border-radius: 4px;
+}
+
+.ant-table-body::-webkit-scrollbar-thumb:hover {
+  background: #005c26;
+}
+
+/* Empty State */
+.ant-empty-description {
+  color: #999;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .selling-products-page {
+    padding: 16px;
+  }
+
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  .page-header h1 {
+    font-size: 24px;
+  }
+
+  .action-buttons {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .action-buttons button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .ant-statistic-content {
+    font-size: 22px;
+  }
+}
+
+/* Loading Overlay */
+.ant-spin-container {
+  position: relative;
+}
+
+.ant-spin-blur {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.ant-card {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* Price Display */
+.price-display {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1890ff;
+}
+
+.profit-display {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.profit-positive {
+  color: #52c41a;
+}
+
+.profit-negative {
+  color: #ff4d4f;
+}
+
+.profit-zero {
+  color: #999;
+}
