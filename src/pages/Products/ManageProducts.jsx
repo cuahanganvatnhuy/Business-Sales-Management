@@ -235,7 +235,7 @@ const ManageProducts = () => {
   // Export Excel
   const handleExport = () => {
     try {
-      const headers = ['STT', 'Tên sản phẩm', 'SKU', 'Danh mục', 'Giá bán', 'Tồn kho', 'Đơn vị', 'Trạng thái'];
+      const headers = ['STT', 'Tên sản phẩm', 'SKU', 'Danh mục', 'Giá nhập', 'Tồn kho', 'Đơn vị', 'Trạng thái'];
       const csvContent = [
         headers.join(','),
         ...filteredProducts.map((product, index) => {
@@ -298,7 +298,7 @@ const ManageProducts = () => {
       render: (categoryId) => getCategoryName(categoryId)
     },
     {
-      title: 'Giá bán',
+      title: 'Giá nhập',
       dataIndex: 'price',
       key: 'price',
       width: 120,
@@ -428,8 +428,8 @@ const ManageProducts = () => {
             <BoxPlotOutlined />
           </div>
           <div>
-            <h1 className="page-title" style={heroStyles.title}>Quản Lý Sản Phẩm</h1>
-            <p style={heroStyles.subtitle}>Theo dõi sản phẩm, tồn kho và trạng thái bán hàng</p>
+            <h1 className="page-title" style={heroStyles.title}>Quản Lý Sản Phẩm <span style={{color: '#747473', fontSize: '14px'}}>(sản phẩm đầu vào)</span></h1>
+            <p style={heroStyles.subtitle}>Theo dõi sản phẩm đâu vào, tồn kho và trạng thái bán hàng</p>
           </div>
         </div>
         <div style={heroStyles.actions}>
@@ -646,7 +646,7 @@ const ManageProducts = () => {
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
             <Form.Item
-              label="Giá bán (đ)"
+              label="Giá nhập (đ)"
               name="price"
               rules={[{ required: true, message: 'Vui lòng nhập giá!' }]}
             >
