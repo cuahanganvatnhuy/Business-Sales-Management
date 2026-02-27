@@ -614,7 +614,7 @@ const MainLayout = () => {
                 justifyContent: 'center' 
               }}>
                 <img 
-                  src="xoanenlogo.png" 
+                  src="logo.png" 
                   alt="Logo" 
                   style={{ 
                     width: '180px', 

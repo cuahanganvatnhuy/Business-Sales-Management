@@ -13,6 +13,7 @@ const { Option } = Select;
 
 const AddProduct = () => {
   const [form] = Form.useForm();
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { user, isAdmin } = useAuth();
   const hasPermission = isAdmin || (user?.permissions || []).includes('products.add');
   const [loading, setLoading] = useState(false);

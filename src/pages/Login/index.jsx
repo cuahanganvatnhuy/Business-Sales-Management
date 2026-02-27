@@ -46,7 +46,7 @@ const Login = () => {
       <Card className="login-card">
         <div className="login-header" style={{ textAlign: 'center', marginBottom: '24px' }}>
           <img 
-            src="/logoxanen.png" 
+            src="/logo6.png" 
             alt="PMQLDH Logo" 
             style={{ 
               maxWidth: '350px', 

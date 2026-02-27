@@ -16,8 +16,7 @@ const EcommerceStatistics = ({ statistics, selectedPlatformLabel = 'Tất Cả S
   const totalProfitTitle = isAllPlatforms
     ? 'Tổng Lợi Nhuận TMĐT'
     : `Tổng Lợi Nhuận - ${selectedPlatformLabel}`;
-
-  const renderTitle = (label, tooltip) => (
+  const renderTitle = (label, tooltip) => ( 
     <Space size={4}>
       <span>{label}</span>
       {tooltip && (

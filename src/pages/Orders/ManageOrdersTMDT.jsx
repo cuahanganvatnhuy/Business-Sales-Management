@@ -19,7 +19,8 @@ import {
   message,
   Popconfirm,
   Dropdown,
-  Modal
+  Modal,
+  Tooltip
 } from 'antd';
 import {
   ShoppingOutlined,
@@ -76,6 +77,7 @@ const ManageOrdersTMDT = () => {
   const [storeFilter, setStoreFilter] = useState('current'); // 'current', 'all', or storeId
   const [dateRange, setDateRange] = useState([null, null]);
   const [platformFilter, setPlatformFilter] = useState('all');
+  const [categoryFilter, setCategoryFilter] = useState('all');
   const [selectedRowKeys, setSelectedRowKeys] = useState([]);
   const [expandedRowKeys, setExpandedRowKeys] = useState([]);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
@@ -112,137 +114,440 @@ const ManageOrdersTMDT = () => {
     padding: '0 15px'
   };
 
-  // Load orders from Firebase
+  // Load products and categories
+  const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
+  
+  // Load all categories
+  
   useEffect(() => {
-    setLoading(true);
-    const ordersRef = ref(database, 'salesOrders');
-    
-    const unsubscribe = onValue(ordersRef, (snapshot) => {
+    const categoriesRef = ref(database, 'categories');
+    const unsubscribe = onValue(categoriesRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
-        // Group items by order instead of flattening
-        const ordersArray = [];
-        
-        Object.keys(data).forEach(key => {
-          const order = data[key];
+        const categoriesList = Object.entries(data).map(([id, cat]) => ({
+          id,
+          ...cat
+        }));
+        setCategories(categoriesList);
+      }
+    });
+    
+    return () => {
+      if (typeof unsubscribe === 'function') {
+        unsubscribe();
+      }
+    };
+  }, []);
+  
+  // Load all products
+  useEffect(() => {
+    const productsRef = ref(database, 'products');
+    onValue(productsRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const productsList = Object.entries(data).map(([id, product]) => ({
+          id,
+          ...product
+        }));
+        setProducts(productsList);
+      }
+    });
+  }, []);
+  
+  // Function to get category name by ID
+  const getCategoryName = (categoryId) => {
+    if (!categoryId) return 'Chưa phân loại';
+    const category = categories.find(c => c.id === categoryId);
+    return category ? category.name : 'Chưa phân loại';
+  };
+
+  // State for pagination
+  const [tablePagination, setTablePagination] = useState({
+    current: 1,
+    pageSize: 10,
+    total: 0,
+    showSizeChanger: true,
+    showQuickJumper: true,
+    showTotal: (total) => `Tổng ${total} đơn hàng`,
+    onChange: (page, pageSize) => {
+      setTablePagination(prev => ({
+        ...prev,
+        current: page,
+        pageSize
+      }));
+    }
+  });
+
+  // Xử lý dữ liệu đơn hàng
+  const processOrdersData = (data, productsList = [], categoriesList = []) => {
+    if (!data) {
+      console.log('❌ Không có dữ liệu để xử lý');
+      return [];
+    }
+
+    console.log('🔍 Đang xử lý dữ liệu đơn hàng...');
+    console.log('📦 Số sản phẩm:', productsList?.length);
+    console.log('🏷️ Số danh mục:', categoriesList?.length);
+
+    try {
+      const result = [];
+      const orderEntries = Object.entries(data);
+      
+      for (const [id, order] of orderEntries) {
+        try {
+          // Kiểm tra xem có phải đơn TMĐT không
+          const isEcommerce = 
+            order.orderType === 'ecommerce' || 
+            order.platform || 
+            order.source === 'ecommerce' || 
+            order.source === 'tmdt' ||
+            order.source === 'tmdt_sales' ||
+            (order.orderId && (order.orderId.includes('TMDT') || order.orderId.includes('SHOP') || order.orderId.includes('LAZ') || order.orderId.includes('TIKI')));
           
-          // Skip if not ecommerce order
-          if (order.orderType !== 'ecommerce') return;
+          if (!isEcommerce) continue;
           
-          // Group all items into order summary
-          if (order.items && Array.isArray(order.items) && order.items.length > 0) {
-            // Calculate totals for multi-item orders
-            const totalQuantity = order.items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
-            const totalSubtotal = order.totalAmount || order.items.reduce((sum, item) => sum + (Number(item.subtotal) || 0), 0);
-            const totalProfit = order.totalProfit || order.items.reduce((sum, item) => sum + (Number(item.profit) || 0), 0);
-            // Use first item's selling price for single-item orders, or calculate average
-            const sellingPrice = order.items.length === 1 
-              ? order.items[0].sellingPrice 
-              : order.items.reduce((sum, item) => sum + (Number(item.sellingPrice) || 0), 0) / order.items.length;
-            
-            // Get product names (comma separated)
-            const productNames = order.items.map(item => item.productName).join(', ');
-            const skus = order.items.map(item => item.sku).join(', ');
-            
-            ordersArray.push({
-              id: key,
-              orderId: order.orderId || key,
-              orderDate: order.orderDate,
-              platform: order.platform,
-              otherPlatform: order.otherPlatform,
-              storeName: order.storeName || 'N/A',
-              storeId: order.storeId || null,
-              createdAt: order.createdAt,
-              updatedAt: order.updatedAt,
-              // Aggregated item data
-              productName: productNames,
-              sku: skus,
-              itemCount: order.items.length,
-              quantity: totalQuantity,
-              unit: order.items[0]?.unit || 'kg', // Use first item's unit
-              sellingPrice: sellingPrice, // Add sellingPrice here
-              subtotal: totalSubtotal,
-              profit: totalProfit,
-              // Store items for detail view
-              items: order.items,
-              _originalOrderKey: key
-            });
-          } else {
-            // Legacy format: data directly on order object
-            ordersArray.push({
-              id: key,
-              orderId: order.orderId || key,
-              ...order,
-              itemCount: 1,
-              _originalOrderKey: key
-            });
+          // Kiểm tra items
+          if (!order.items || !Array.isArray(order.items) || order.items.length === 0) {
+            console.log(`⚠️ Đơn hàng ${id} không có sản phẩm`);
+            continue;
           }
-        });
-        
-        // Sort by creation date
-        ordersArray.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-        
-        console.log('📦 Loaded orders:', ordersArray.length);
-        console.log('📊 Sample order:', {
-          orderId: ordersArray[0]?.orderId,
-          sellingPrice: ordersArray[0]?.sellingPrice,
-          firstItemSellingPrice: ordersArray[0]?.items?.[0]?.sellingPrice,
-          subtotal: ordersArray[0]?.subtotal
-        });
-        
-        setOrders(ordersArray);
-        setFilteredOrders(ordersArray);
-      } else {
+          
+          // Xử lý từng sản phẩm trong đơn
+          const itemsWithCategories = [];
+          for (const item of order.items) {
+            try {
+              const product = productsList.find(p => 
+                p && (p.id === item.productId || p.sku === item.sku || p.name === item.productName)
+              );
+              
+              itemsWithCategories.push({
+                ...item,
+                categoryName: product ? getCategoryName(product.categoryId) : 'Chưa phân loại',
+                productName: item.productName || product?.name || 'Không rõ',
+                sku: item.sku || product?.sku || 'Không có SKU',
+                price: parseFloat(item.sellingPrice || item.price) || 0,
+                costPrice: parseFloat(product?.costPrice || product?.cost || item.costPrice || item.cost || 0),
+                quantity: parseInt(item.quantity) || 1,
+                unit: item.unit || 'cái',
+                // Thêm thông tin sản phẩm đầy đủ để debug
+                _productData: product ? {
+                  hasCost: !!product.costPrice || !!product.cost,
+                  costPrice: product.costPrice,
+                  cost: product.cost
+                } : null
+              });
+            } catch (itemError) {
+              console.error(`❌ Lỗi xử lý sản phẩm trong đơn ${id}:`, itemError);
+              // Vẫn thêm sản phẩm với thông tin cơ bản nếu có lỗi
+              itemsWithCategories.push({
+                ...item,
+                categoryName: 'Lỗi xử lý',
+                productName: item.productName || 'Không rõ',
+                sku: item.sku || 'Không có SKU',
+                price: parseFloat(item.sellingPrice || item.price) || 0,
+                costPrice: parseFloat(item.costPrice || item.cost || 0),
+                quantity: parseInt(item.quantity) || 1,
+                unit: item.unit || 'cái',
+                _error: 'Lỗi xử lý sản phẩm',
+                _itemData: item
+              });
+            }
+          }
+          
+          // Tính tổng tiền và lợi nhuận từ các sản phẩm trong đơn hàng
+          let totalAmount = 0;
+          let totalProfit = 0;
+          
+          itemsWithCategories.forEach(item => {
+            const itemPrice = parseFloat(item.sellingPrice || item.price || 0);
+            const itemQuantity = parseInt(item.quantity || 0);
+            
+            // Debug log for cost data
+            console.log('Product cost data:', {
+              itemId: item.id,
+              itemName: item.productName,
+              sellingPrice: itemPrice,
+              costPrice: item.costPrice,
+              cost: item.cost,
+              quantity: itemQuantity,
+              productData: item._productData
+            });
+            
+            // Get cost price from various possible locations
+            const itemCost = parseFloat(
+              item.costPrice || 
+              item.cost || 
+              (item._productData ? (item._productData.costPrice || item._productData.cost) : 0) || 
+              0
+            );
+            
+            // Log warning if cost is 0 or not set
+            if (itemCost === 0) {
+              console.warn('⚠️ Cost price is 0 for item:', {
+                id: item.id,
+                name: item.productName,
+                sku: item.sku,
+                sellingPrice: itemPrice
+              });
+            }
+            
+            const itemSubtotal = itemPrice * itemQuantity;
+            const itemProfit = (itemPrice - itemCost) * itemQuantity;
+            
+            totalAmount += itemSubtotal;
+            totalProfit += itemProfit;
+            
+            // Cập nhật lợi nhuận cho từng sản phẩm
+            item.profit = itemProfit;
+            item.subtotal = itemSubtotal;
+            item._debug = {
+              price: itemPrice,
+              cost: itemCost,
+              quantity: itemQuantity,
+              profit: itemProfit,
+              subtotal: itemSubtotal
+            };
+          });
+          
+          // Tạo đối tượng đơn hàng đã xử lý
+          const processedOrder = {
+            ...order,
+            id,
+            key: id,
+            itemCount: itemsWithCategories.length,
+            items: itemsWithCategories,
+            orderDate: order.orderDate || order.createdAt || new Date().toISOString(),
+            totalAmount: totalAmount,
+            subtotal: totalAmount, // Đảm bảo có trường subtotal cho cột tổng tiền
+            profit: totalProfit,   // Tổng lợi nhuận của đơn hàng
+            platform: order.platform || order.source || 'Khác',
+            storeName: order.storeName || order.store || 'Chưa xác định',
+            status: order.status || 'completed',
+            paymentStatus: order.paymentStatus || 'paid',
+            // Cập nhật lại giá bán và số lượng tổng cho đơn hàng
+            sellingPrice: itemsWithCategories.length > 0 ? itemsWithCategories[0].sellingPrice : 0,
+            quantity: itemsWithCategories.reduce((sum, item) => sum + (parseInt(item.quantity) || 0), 0)
+          };
+          
+          result.push(processedOrder);
+          
+        } catch (orderError) {
+          console.error(`❌ Lỗi xử lý đơn hàng ${id}:`, orderError);
+          // Vẫn tiếp tục xử lý các đơn khác nếu có lỗi
+        }
+      }
+      
+      console.log(`✅ Đã xử lý thành công ${result.length} đơn hàng TMĐT`);
+      return result;
+      
+    } catch (error) {
+      console.error('❌ Lỗi nghiêm trọng khi xử lý dữ liệu:', error);
+      return [];
+    }
+  };
+
+  // Load orders from Firebase
+  useEffect(() => {
+    console.log('🔄 [1/3] Bắt đầu tải đơn hàng từ Firebase...');
+    setLoading(true);
+    
+    const ordersRef = ref(database, 'salesOrders');
+    console.log('� Đường dẫn Firebase:', ordersRef.toString());
+    
+    const unsubscribe = onValue(ordersRef, (snapshot) => {
+      console.log('✅ [2/3] Đã nhận dữ liệu từ Firebase');
+      
+      if (!snapshot.exists()) {
+        console.warn('⚠️ Không tìm thấy dữ liệu đơn hàng trong salesOrders');
+        message.warning('Không tìm thấy dữ liệu đơn hàng');
         setOrders([]);
         setFilteredOrders([]);
+        setLoading(false);
+        return;
       }
+      
+      const data = snapshot.val();
+      console.log(`📊 Tổng số đơn hàng: ${Object.keys(data || {}).length}`);
+      
+      if (!data || Object.keys(data).length === 0) {
+        console.warn('⚠️ Dữ liệu đơn hàng trống');
+        message.warning('Không có dữ liệu đơn hàng');
+        setOrders([]);
+        setFilteredOrders([]);
+        setLoading(false);
+        return;
+      }
+      
+      try {
+        // Log sample of raw data
+        const firstOrderKey = Object.keys(data)[0];
+        console.log('🔍 Mẫu dữ liệu thô:', {
+          id: firstOrderKey,
+          ...data[firstOrderKey]
+        });
+        
+        // Process the data with products and categories
+        console.log('🔄 Đang xử lý dữ liệu...');
+        const processedData = processOrdersData(data, products, categories);
+        console.log(`✅ Đã xử lý ${processedData.length} đơn hàng TMĐT`);
+        
+        if (processedData.length === 0) {
+          console.warn('⚠️ Không tìm thấy đơn hàng TMĐT nào phù hợp');
+          message.warning('Không tìm thấy đơn hàng TMĐT nào');
+        }
+        
+        // Update state with the processed data
+        setTablePagination(prev => ({
+          ...prev,
+          total: processedData.length,
+          current: 1 // Reset về trang đầu tiên
+        }));
+        
+        setOrders(processedData);
+        setFilteredOrders(processedData);
+        
+        // Log first order for debugging
+        if (processedData.length > 0) {
+          console.log('� Mẫu đơn hàng đã xử lý:', {
+            id: processedData[0].id,
+            items: processedData[0].items?.length,
+            total: processedData[0].totalAmount,
+            date: processedData[0].orderDate,
+            platform: processedData[0].platform
+          });
+        }
+        
+      } catch (error) {
+        console.error('❌ Lỗi khi xử lý dữ liệu:', error);
+        message.error('Lỗi khi xử lý dữ liệu: ' + (error.message || 'Lỗi không xác định'));
+      } finally {
+        setLoading(false);
+      }
+      
+    }, (error) => {
+      console.error('❌ Lỗi khi tải dữ liệu:', error);
+      message.error('Không thể tải dữ liệu đơn hàng: ' + (error.message || 'Lỗi kết nối'));
       setLoading(false);
     });
-
-    return () => unsubscribe();
-  }, []);
+    
+    return () => {
+      try {
+        console.log('🧹 Dọn dẹp kết nối...');
+        if (typeof unsubscribe === 'function') {
+          unsubscribe();
+        }
+      } catch (error) {
+        console.error('❌ Lỗi khi đóng kết nối:', error);
+      }
+    };
+  }, [products, categories]);
 
   // Apply filters
   useEffect(() => {
     let filtered = [...orders];
+    
+    console.log('🔍 Applying filters:', {
+      storeFilter,
+      selectedStore: selectedStore?.name,
+      searchText,
+      dateRange: dateRange?.map(d => d?.format('DD/MM/YYYY')),
+      platformFilter
+    });
 
     // Store filter
     if (storeFilter === 'current' && selectedStore && selectedStore.id !== 'all') {
-      filtered = filtered.filter(order => order.storeName === selectedStore.name);
+      filtered = filtered.filter(order => 
+        order.storeName?.toLowerCase() === selectedStore.name?.toLowerCase() ||
+        order.store?.toLowerCase() === selectedStore.name?.toLowerCase()
+      );
+      console.log(`🛍️ Filtered by current store (${selectedStore.name}):`, filtered.length);
     } else if (storeFilter !== 'all' && storeFilter !== 'current') {
-      // Filter by specific store ID
       const store = stores.find(s => s.id === storeFilter);
       if (store) {
-        filtered = filtered.filter(order => order.storeName === store.name);
+        filtered = filtered.filter(order => 
+          order.storeName?.toLowerCase() === store.name?.toLowerCase() ||
+          order.store?.toLowerCase() === store.name?.toLowerCase()
+        );
+        console.log(`🏪 Filtered by store ${store.name}:`, filtered.length);
       }
     }
-    // If storeFilter === 'all' OR selectedStore.id === 'all', show all orders (no filter)
 
     // Search filter
     if (searchText) {
+      const search = searchText.toLowerCase();
       filtered = filtered.filter(order =>
-        order.productName?.toLowerCase().includes(searchText.toLowerCase()) ||
-        order.sku?.toLowerCase().includes(searchText.toLowerCase()) ||
-        order.orderId?.toLowerCase().includes(searchText.toLowerCase())
+        (order.productName?.toLowerCase().includes(search)) ||
+        (order.sku?.toLowerCase().includes(search)) ||
+        (order.orderId?.toLowerCase().includes(search)) ||
+        (order.id?.toLowerCase().includes(search)) ||
+        (order.items?.some(item => 
+          item.productName?.toLowerCase().includes(search) ||
+          item.sku?.toLowerCase().includes(search)
+        ))
       );
+      console.log('🔍 After search filter:', filtered.length);
     }
 
     // Date range filter
     if (dateRange[0] && dateRange[1]) {
       filtered = filtered.filter(order => {
-        const orderDate = dayjs(order.orderDate);
-        return orderDate.isAfter(dateRange[0].startOf('day')) && 
-               orderDate.isBefore(dateRange[1].endOf('day'));
+        try {
+          const orderDate = dayjs(order.orderDate || order.createdAt);
+          return orderDate.isAfter(dateRange[0].startOf('day')) && 
+                 orderDate.isBefore(dateRange[1].endOf('day'));
+        } catch (error) {
+          console.error('Error processing order date:', order.orderDate, error);
+          return false;
+        }
       });
+      console.log('📅 After date filter:', filtered.length);
     }
 
     // Platform filter
     if (platformFilter !== 'all') {
-      filtered = filtered.filter(order => order.platform === platformFilter);
+      filtered = filtered.filter(order => 
+        order.platform?.toLowerCase() === platformFilter.toLowerCase() ||
+        order.source?.toLowerCase() === platformFilter.toLowerCase()
+      );
+      console.log('🛒 After platform filter:', filtered.length);
     }
 
+    // Category filter
+    if (categoryFilter && categoryFilter !== 'all') {
+      console.log('🔍 Filtering by category:', categoryFilter);
+      filtered = filtered.filter(order => {
+        const hasMatchingCategory = order.items?.some(item => {
+          console.log('Item category:', item.categoryName, 'Looking for:', categoryFilter);
+          return item.categoryName === categoryFilter || 
+                 (categoryFilter === 'Chưa phân loại' && !item.categoryName);
+        });
+        return hasMatchingCategory;
+      });
+      console.log('📦 After category filter:', filtered.length, 'orders found');
+    }
+
+    // Update filtered orders and pagination
     setFilteredOrders(filtered);
-  }, [searchText, dateRange, platformFilter, storeFilter, orders, selectedStore, stores]);
+    
+    // Update pagination total and reset to first page
+    setTablePagination(prev => ({
+      ...prev,
+      total: filtered.length,
+      current: 1 // Reset to first page when filters change
+    }));
+    
+    console.log('✅ Applied all filters. Total filtered orders:', filtered.length);
+  }, [searchText, dateRange, platformFilter, categoryFilter, storeFilter, orders, selectedStore, stores]);
+  
+  // Handle pagination changes
+  const handleTableChange = (pagination, filters, sorter) => {
+    setTablePagination(prev => ({
+      ...prev,
+      current: pagination.current,
+      pageSize: pagination.pageSize
+    }));
+  };
 
   // Quick date filters
   const handleQuickFilter = (type) => {
@@ -267,6 +572,7 @@ const ManageOrdersTMDT = () => {
     setSearchText('');
     setDateRange([null, null]);
     setPlatformFilter('all');
+    setCategoryFilter('all');
     setStoreFilter('current'); // Reset to current store (default)
     message.success('Đã xóa tất cả bộ lọc');
   };
@@ -788,7 +1094,7 @@ const ManageOrdersTMDT = () => {
       'Sàn TMĐT': getPlatformName(order.platform),
       'Ngày Đặt': order.orderDate,
       'Số Lượng': order.quantity,
-      'Đơn Vị': order.unit || 'kg',
+      'Đơn Vị': order.unit || 'Lỗi',
       'Giá Bán': order.sellingPrice,
       'Tổng Tiền': order.subtotal,
       'Cửa Hàng': order.storeName || 'N/A'
@@ -831,6 +1137,29 @@ const ManageOrdersTMDT = () => {
     return colors[platform] || 'default';
   };
 
+  // Tạo dữ liệu đã xử lý cho bảng
+  const processedOrders = React.useMemo(() => {
+    if (!orders || !Array.isArray(orders)) return []; 
+    return orders.map(order => {
+      // Xử lý dữ liệu cho mỗi đơn hàng
+      const processedOrder = { ...order };    
+      // Đảm bảo items là mảng
+      if (!Array.isArray(processedOrder.items)) {
+        processedOrder.items = [];
+      }
+      // Thêm thông tin category cho từng sản phẩm
+      processedOrder.items = processedOrder.items.map(item => {
+        const product = products.find(p => p && (p.id === item.productId || p.sku === item.sku));
+        return {
+          ...item,
+          categoryName: getCategoryName(product?.categoryId)
+        };
+      });
+      
+      return processedOrder;
+    });
+  }, [orders, products]);
+
   // Table columns
   const columns = [
     {
@@ -854,34 +1183,95 @@ const ManageOrdersTMDT = () => {
       dataIndex: 'productName',
       key: 'productName',
       width: 250,
-      render: (name, record) => {
-        if (record.itemCount > 1) {
+      render: (_, record) => {
+        if (!record.items || !Array.isArray(record.items)) return 'N/A';
+        
+        if (record.items.length > 1) {
           return (
             <div>
-              <div style={{ fontWeight: 600 }}>{record.itemCount} sản phẩm</div>
-              <div style={{ fontSize: 12, color: '#666', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {name}
+              <div style={{ fontWeight: 600 }}>{record.items.length} sản phẩm</div>
+              <div style={{ fontSize: 12, color: '#666' }}>
+                {record.items.map((item, index) => (
+                  <div key={index} style={{ marginBottom: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {item.productName || 'N/A'}
+                  </div>
+                ))}
               </div>
             </div>
           );
         }
-        return name || 'N/A';
+        return record.items[0]?.productName || 'N/A';
+      }
+    },
+    {
+      title: 'Danh mục',
+      key: 'category',
+      width: 150,
+      render: (_, record) => {
+        if (!record.items || !Array.isArray(record.items)) return 'N/A';
+        
+        // Lấy danh sách danh mục duy nhất
+        const uniqueCategories = Array.from(new Set(
+          record.items
+            .map(item => item.categoryName)
+            .filter(Boolean)
+        ));
+        
+        if (uniqueCategories.length === 0) return 'Chưa phân loại';
+        if (uniqueCategories.length === 1) return uniqueCategories[0];
+        
+        return (
+          <Tooltip title={uniqueCategories.join(', ')}>
+            <Tag color="blue">{uniqueCategories.length} danh mục</Tag>
+          </Tooltip>
+        );
+      },
+      filters: [
+        { text: 'Chưa phân loại', value: 'Chưa phân loại' },
+        ...Array.from(new Set(
+          processedOrders.flatMap(order => 
+            (order.items || []).map(item => item.categoryName).filter(Boolean)
+          )
+        )).map(cat => ({
+          text: cat,
+          value: cat
+        }))
+      ],
+      onFilter: (value, record) => {
+        if (!record.items) return false;
+        
+        if (value === 'Chưa phân loại') {
+          return record.items.every(item => !item.categoryName);
+        }
+        
+        return record.items.some(item => item.categoryName === value);
       }
     },
     {
       title: 'SKU',
-      dataIndex: 'sku',
       key: 'sku',
       width: 150,
-      render: (sku, record) => {
-        if (record.itemCount > 1) {
+      render: (_, record) => {
+        if (!record.items || !Array.isArray(record.items)) return 'N/A';
+        
+        if (record.items.length > 1) {
           return (
-            <div style={{ fontSize: 12, color: '#666', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {sku || 'N/A'}
+            <div>
+              {record.items.map((item, index) => (
+                <div key={index} style={{ 
+                  marginBottom: 4, 
+                  whiteSpace: 'nowrap', 
+                  overflow: 'hidden', 
+                  textOverflow: 'ellipsis',
+                  fontSize: 12
+                }}>
+                  {item.sku || 'N/A'}
+                </div>
+              ))}
             </div>
           );
         }
-        return sku || 'N/A';
+        return record.items[0]?.sku || 'N/A';
       }
     },
     {
@@ -901,9 +1291,25 @@ const ManageOrdersTMDT = () => {
       key: 'storeName',
       width: 150,
       render: (storeName) => (
-        <Tag color="green" icon={<ShopOutlined />}>
-          {storeName || 'N/A'}
-        </Tag>
+        <div style={{
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          width: '100%'
+        }}>
+          <Tag color="green" icon={<ShopOutlined />} style={{ maxWidth: '100%' }}>
+            <span style={{
+              display: 'inline-block',
+              maxWidth: 'calc(100% - 20px)',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              verticalAlign: 'middle'
+            }}>
+              {storeName || 'N/A'}
+            </span>
+          </Tag>
+        </div>
       )
     },
     {
@@ -915,19 +1321,23 @@ const ManageOrdersTMDT = () => {
     },
     {
       title: 'Số Lượng',
-      dataIndex: 'quantity',
       key: 'quantity',
       width: 100,
       align: 'center',
-      render: (qty) => qty || 0
+      render: (_, record) => {
+        if (!record.items || !Array.isArray(record.items)) return 0;
+        return record.items.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0);
+      }
     },
     {
       title: 'Đơn Vị',
-      dataIndex: 'unit',
       key: 'unit',
       width: 80,
       align: 'center',
-      render: (unit) => unit || 'kg'
+      render: (_, record) => {
+        if (!record.items || !Array.isArray(record.items) || record.items.length === 0) return 'kg';
+        return record.items[0]?.unit || 'kg';
+      }
     },
     {
       title: 'Giá Bán',
@@ -943,7 +1353,6 @@ const ManageOrdersTMDT = () => {
           hasItems: !!record.items,
           firstItemSellingPrice: record.items?.[0]?.sellingPrice
         });
-        
         // If has items array, calculate average or show first item price
         if (record.items && record.items.length > 0) {
           if (record.items.length === 1) {
@@ -966,6 +1375,18 @@ const ManageOrdersTMDT = () => {
       render: (amount) => (
         <span style={{ color: '#007A33', fontWeight: 600 }}>
           {formatCurrency(amount || 0)}
+        </span>
+      )
+    },
+    {
+      title: 'Lợi Nhuận',
+      dataIndex: 'profit',
+      key: 'profit',
+      width: 130,
+      align: 'right',
+      render: (profit) => (
+        <span style={{ color: (profit || 0) >= 0 ? '#52c41a' : '#ff4d4f', fontWeight: 600 }}>
+          {formatCurrency(profit || 0)}
         </span>
       )
     },
@@ -1285,19 +1706,20 @@ const ManageOrdersTMDT = () => {
         }}
       >
         <Space style={{ marginBottom: 16, width: '100%' }} direction="vertical">
-          <Row gutter={[16, 16]}>
-            <Col xs={24} md={12}>
+          <Row gutter={[8, 8]} style={{ display: 'flex', flexWrap: 'nowrap', marginBottom: 16 }}>
+            <Col flex="1" style={{ minWidth: '200px' }}>
               <Input
-                placeholder="Nhập mã đơn hàng, SKU, tên sản phẩm..."
+                placeholder="Tìm kiếm..."
                 prefix={<SearchOutlined />}
                 value={searchText}
                 onChange={(e) => setSearchText(e.target.value)}
                 allowClear
               />
             </Col>
-            <Col xs={24} md={6}>
+        
+            <Col flex="1" style={{ minWidth: '120px' }}>
               <Select
-                placeholder="Lọc theo cửa hàng"
+                placeholder="Cửa hàng"
                 value={storeFilter}
                 onChange={setStoreFilter}
                 style={{ width: '100%' }}
@@ -1313,9 +1735,9 @@ const ManageOrdersTMDT = () => {
                 ))}
               </Select>
             </Col>
-            <Col xs={24} md={6}>
+            <Col flex="1" style={{ minWidth: '120px' }}>
               <Select
-                placeholder="Tất cả sàn"
+                placeholder="Sàn"
                 value={platformFilter}
                 onChange={setPlatformFilter}
                 style={{ width: '100%' }}
@@ -1328,12 +1750,34 @@ const ManageOrdersTMDT = () => {
                 <Option value="tiki">Tiki</Option>
                 <Option value="facebook">Facebook</Option>
                 <Option value="zalo">Zalo</Option>
+                <Option value="Website">Website</Option>
                 <Option value="other">Khác</Option>
               </Select>
             </Col>
-          </Row>
-          <Row gutter={16}>
-            <Col xs={24}>
+            <Col flex="1" style={{ minWidth: '180px' }}>
+              <Select
+                placeholder="Chọn danh mục"
+                value={categoryFilter}
+                onChange={setCategoryFilter}
+                style={{ width: '100%' }}
+                allowClear
+              >
+                <Option value="all">Tất cả danh mục</Option>
+                <Option value="Chưa phân loại">Chưa phân loại</Option>
+                {Array.from(new Set(
+                  orders.flatMap(order => 
+                    (order.items || [])
+                      .map(item => item.categoryName)
+                      .filter(Boolean)
+                  ) 
+                )).map((category, index) => (
+                  <Option key={`${category}-${index}`} value={category}>
+                    {category}
+                  </Option>
+                ))}
+              </Select>
+            </Col>
+             <Col>
               <Button
                 icon={<CloseCircleOutlined />}
                 onClick={handleClearFilters}
@@ -1343,118 +1787,163 @@ const ManageOrdersTMDT = () => {
               </Button>
             </Col>
           </Row>
+          
         </Space>
 
+        {/* Table with pagination */}
         <Table
           columns={columns}
           dataSource={filteredOrders}
-          loading={loading}
           rowKey="id"
-          rowSelection={{
-            selectedRowKeys,
-            onChange: setSelectedRowKeys,
-            selections: [
-              Table.SELECTION_ALL,
-              Table.SELECTION_INVERT,
-              Table.SELECTION_NONE,
-            ],
-          }}
-          expandable={{
-            expandedRowRender: (record) => {
-              if (!record.items || record.items.length <= 1) return null;
-              
-              return (
-                <div style={{ padding: '8px 48px', background: '#fafafa' }}>
-                  <div style={{ fontWeight: 600, marginBottom: 8, color: '#007A33' }}>
-                    Chi tiết {record.items.length} sản phẩm:
-                  </div>
-                  {record.items.map((item, index) => (
-                    <div key={index} style={{ 
-                      padding: '8px 12px', 
-                      marginBottom: 4, 
-                      background: 'white',
-                      borderLeft: '3px solid #007A33',
-                      borderRadius: 4
-                    }}>
-                      <Row gutter={16}>
-                        <Col span={8}>
-                          <strong>Sản phẩm:</strong> {item.productName}
-                        </Col>
-                        <Col span={4}>
-                          <strong>SKU:</strong> {item.sku}
-                        </Col>
-                        <Col span={3}>
-                          <strong>SL:</strong> {item.quantity} {item.unit}
-                        </Col>
-                        <Col span={3}>
-                          <strong>Giá:</strong> {formatCurrency(item.sellingPrice)}
-                        </Col>
-                        <Col span={3}>
-                          <strong>Tổng:</strong> <span style={{ color: '#007A33' }}>{formatCurrency(item.subtotal)}</span>
-                        </Col>
-                        <Col span={3}>
-                          <strong>LN:</strong> <span style={{ color: item.profit >= 0 ? '#52c41a' : '#ff4d4f' }}>
-                            {formatCurrency(item.profit)}
-                          </span>
-                        </Col>
-                      </Row>
-                    </div>
-                  ))}
-                </div>
-              );
-            },
-            rowExpandable: (record) => record.items && record.items.length > 1,
-            expandedRowKeys: expandedRowKeys,
-            onExpandedRowsChange: setExpandedRowKeys,
-            showExpandColumn: false, // Hide expand icon
-          }}
-          onRow={(record) => ({
-            onClick: (e) => {
-              // Don't expand if clicking on checkbox, delete button, or action column
-              if (e.target.closest('.ant-checkbox-wrapper') || 
-                  e.target.closest('.ant-btn') ||
-                  e.target.closest('.ant-table-selection-column') ||
-                  e.target.closest('.ant-popconfirm')) {
-                return;
-              }
-              
-              // Only expand if has multiple items
-              if (record.items && record.items.length > 1) {
-                setExpandedRowKeys(prevKeys => {
-                  const isExpanded = prevKeys.includes(record.id);
-                  if (isExpanded) {
-                    return prevKeys.filter(key => key !== record.id);
-                  } else {
-                    return [...prevKeys, record.id];
-                  }
-                });
-              }
-            },
-            style: {
-              cursor: record.items && record.items.length > 1 ? 'pointer' : 'default',
-              backgroundColor: expandedRowKeys.includes(record.id) ? '#f0f9ff' : undefined
-            },
-            onMouseEnter: (e) => {
-              if (record.items && record.items.length > 1) {
-                e.currentTarget.style.backgroundColor = '#fafafa';
-              }
-            },
-            onMouseLeave: (e) => {
-              if (!expandedRowKeys.includes(record.id)) {
-                e.currentTarget.style.backgroundColor = '';
-              } else {
-                e.currentTarget.style.backgroundColor = '#f0f9ff';
-              }
-            }
-          })}
-          scroll={{ x: 1500 }}
+          loading={loading}
+          scroll={{ x: 1500, y: 'calc(100vh - 300px)' }}
           pagination={{
-            total: filteredOrders.length,
-            pageSize: 10,
+            current: tablePagination.current,
+            pageSize: tablePagination.pageSize,
+            total: tablePagination.total,
             showSizeChanger: true,
-            showTotal: (total) => `Tổng ${total} đơn hàng`
-          }}
-        />
+            showQuickJumper: true,
+            showTotal: (total) => `Tổng: ${total} đơn hàng`,
+            locale: {
+              items_per_page: ' / trang',
+              jump_to: 'Đến',
+              jump_to_confirm: 'xác nhận',
+              page: 'Trang',
+              prev_page: 'Trang trước',
+              next_page: 'Trang sau',
+              prev_5: 'Trang trước 5',
+              next_5: 'Trang sau 5',
+              prev_3: 'Trang trước 3',
+              next_3: 'Trang sau 3',
+            },
+            showLessItems: true,
+            size: 'small',
+            pageSizeOptions: ['10', '20', '50', '100', '1000000'],
+            onChange: (page, pageSize) => {
+              setTablePagination(prev => ({
+                ...prev,
+                current: page,
+                pageSize: Number(pageSize) === 1000000 ? filteredOrders.length : Number(pageSize)
+              }));
+            },
+            onShowSizeChange: (_, size) => {
+              setTablePagination(prev => ({
+                ...prev,
+                current: 1,
+                pageSize: Number(size) === 1000000 ? filteredOrders.length : Number(size)
+              }));
+            },
+            // Custom page size selector
+            itemRender: (_, type, originalElement) => {
+              if (type === 'pageSize') {
+                return (
+                  <Select
+                    value={tablePagination.pageSize === filteredOrders.length ? 1000000 : tablePagination.pageSize}
+                    onChange={(value) => {
+                      const newPageSize = value === 1000000 ? filteredOrders.length : value;
+                      setTablePagination(prev => ({
+                        ...prev,
+                        current: 1,
+                        pageSize: newPageSize
+                      }));
+                    }}
+                    options={[
+                      { value: 10, label: '10/trang' },
+                      { value: 20, label: '20/trang' },
+                      { value: 50, label: '50/trang' },
+                      { value: 100, label: '100/trang' },
+                      { value: 1000000, label: 'Hiển thị tất cả' }
+                    ]}
+                    bordered={false}
+                    dropdownMatchSelectWidth={false}
+                  />
+                );
+              }
+              return originalElement;
+            }
+              }}
+              expandable={{
+                expandedRowRender: (record) => {
+                  if (!record.items || !Array.isArray(record.items)) return null;
+                  
+                  return (
+                    <div style={{ margin: 0, padding: 0 }}>
+                      {record.items.map((item, index) => (
+                        <div key={index} style={{ 
+                          padding: '8px 12px', 
+                          marginBottom: 4, 
+                          background: 'white',
+                          borderLeft: '3px solid #007A33',
+                          borderRadius: 4
+                        }}>
+                          <Row gutter={16}>
+                            <Col span={8}>
+                              <strong>Sản phẩm:</strong> {item.productName || 'N/A'}
+                            </Col>
+                            <Col span={4}>
+                              <strong>SKU:</strong> {item.sku || 'N/A'}
+                            </Col>
+                            <Col span={3}>
+                              <strong>SL:</strong> {item.quantity || 0} {item.unit || ''}
+                            </Col>
+                            <Col span={3}>
+                              <strong>Giá:</strong> {formatCurrency(item.sellingPrice || 0)}
+                            </Col>
+                            <Col span={3}>
+                              <strong>Tổng:</strong> <span style={{ color: '#007A33' }}>{formatCurrency(item.subtotal || 0)}</span>
+                            </Col>
+                            <Col span={3}>
+                              <strong>LN:</strong> <span style={{ color: (item.profit || 0) >= 0 ? '#52c41a' : '#ff4d4f' }}>
+                                {formatCurrency(item.profit || 0)}
+                              </span>
+                            </Col>
+                          </Row>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                },
+                rowExpandable: (record) => record.items && record.items.length > 1,
+                expandedRowKeys: expandedRowKeys,
+                onExpandedRowsChange: setExpandedRowKeys,
+                showExpandColumn: false
+              }}
+              onRow={(record) => ({
+                onClick: (e) => {
+                  if (e.target.closest('.ant-checkbox-wrapper') || 
+                      e.target.closest('.ant-btn') ||
+                      e.target.closest('.ant-table-selection-column') ||
+                      e.target.closest('.ant-popconfirm')) {
+                    return;
+                  }
+                  
+                  if (record.items && record.items.length > 1) {
+                    setExpandedRowKeys(prevKeys => {
+                      const isExpanded = prevKeys.includes(record.id);
+                      return isExpanded 
+                        ? prevKeys.filter(key => key !== record.id)
+                        : [...prevKeys, record.id];
+                    });
+                  }
+                },
+                style: {
+                  cursor: record.items && record.items.length > 1 ? 'pointer' : 'default',
+                  backgroundColor: expandedRowKeys.includes(record.id) ? '#f0f9ff' : undefined
+                },
+                onMouseEnter: (e) => {
+                  if (record.items && record.items.length > 1) {
+                    e.currentTarget.style.backgroundColor = '#f5f5f5';
+                  }
+                },
+                onMouseLeave: (e) => {
+                  if (record.items && record.items.length > 1) {
+                    e.currentTarget.style.backgroundColor = expandedRowKeys.includes(record.id) ? '#f0f9ff' : 'white';
+                  }
+                }
+              })}
+            />
+          );
+        })()}
       </Card>
 
       {/* Detail Modal */}
@@ -1557,7 +2046,6 @@ const ManageOrdersTMDT = () => {
                 }
               ]}
             />
-
             {/* Summary */}
             <div style={{ marginTop: 16, textAlign: 'right' }}>
               <p style={{ fontSize: 16 }}>
