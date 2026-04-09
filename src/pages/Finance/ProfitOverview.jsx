@@ -664,7 +664,7 @@ const calculateNetForOrder = (order) => {
         return {
           name: data.channel,
           value: new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(data.profit)
-        };
+        };  
       }
     },
     // Thêm xử lý cho dữ liệu rỗng hoặc bằng 0

@@ -3,3 +3,4 @@ export { default as ProfitOverview } from './ProfitOverview';
 export { default as EcommerceProfit } from './EcommerceProfit';
 export { default as RetailProfit } from './RetailProfit';
 export { default as WholesaleProfit } from './WholesaleProfit';
+export { default as WithdrawalHistory } from './WithdrawalHistory';

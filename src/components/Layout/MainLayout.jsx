@@ -71,6 +71,7 @@ const MainLayout = () => {
     '/finance/ecommerce-profit': 'finance.profit.ecommerce.view',
     '/finance/retail-profit': 'finance.profit.retail.view',
     '/finance/wholesale-profit': 'finance.profit.wholesale.view',
+    '/finance/withdrawal-history': 'finance.withdrawal.view',
     '/reports': 'reports.view',
     'warehouse': null, // Menu group - hiển thị nếu có ít nhất 1 child có quyền
     '/warehouse/inventory': 'warehouse.inventory.view',
@@ -285,6 +286,11 @@ const MainLayout = () => {
           key: '/finance/wholesale-profit',
           icon: <i className="fas fa-warehouse" />,
           label: 'Lợi Nhuận Đơn Sỉ',
+        },
+        {
+          key: '/finance/withdrawal-history',
+          icon: <DollarOutlined />,
+          label: 'Lịch Sử Rút Tiền',
         },
       ]
     },
