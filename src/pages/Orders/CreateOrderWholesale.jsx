@@ -154,54 +154,132 @@ const CreateOrderWholesale = () => {
     return () => unsubscribe();
   }, []);
 
-  // Load customer's previous orders to get price history
+  // Load customer's price history from customer pricing data
   const loadCustomerPriceHistory = async (customerId, customerName) => {
     try {
-      const ordersRef = ref(database, 'salesOrders');
-      const snapshot = await get(ordersRef);
+      // First try to load from customer pricing data
+      const customerPricingRef = ref(database, 'customerPricing');
+      const pricingSnapshot = await get(customerPricingRef);
       
-      const ordersData = snapshot.val();
-      if (!ordersData) {
-        setCustomerPriceHistory({});
-        return;
-      }
-
-      // Filter orders by customer and orderType
-      const customerOrders = Object.values(ordersData)
-        .filter(order => 
-          order.orderType === 'wholesale' &&
-          (order.customerId === customerId || order.customerName === customerName)
-        )
-        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)); // Latest first
-
-      if (customerOrders.length === 0) {
-        setCustomerPriceHistory({});
-        return;
-      }
-
-      // Get most recent order's pricing for each product
-      const priceHistory = {};
-      const latestOrder = customerOrders[0]; // Most recent order
-
-      if (latestOrder.items && Array.isArray(latestOrder.items)) {
-        latestOrder.items.forEach(item => {
-          priceHistory[item.productId] = {
-            discountType: item.discountType || 'fixed',
-            discountValue: item.discountValue || 0,
-            priceAfterDiscount: item.priceAfterDiscount || item.sellingPrice
-          };
+      let priceHistory = {};
+      
+      if (pricingSnapshot.val()) {
+        const pricingData = pricingSnapshot.val();
+        
+        // Look for customer-specific pricing
+        Object.keys(pricingData).forEach(key => {
+          const pricing = pricingData[key];
+          if ((pricing.customerId === customerId || pricing.customerName === customerName) && pricing.status === 'active') {
+            // Use this pricing as the base
+            if (pricing.products && typeof pricing.products === 'object') {
+              Object.keys(pricing.products).forEach(productId => {
+                priceHistory[productId] = pricing.products[productId];
+              });
+            }
+          }
         });
+      }
+      
+      // If no pricing found, fall back to last order pricing
+      if (Object.keys(priceHistory).length === 0) {
+        const ordersRef = ref(database, 'salesOrders');
+        const snapshot = await get(ordersRef);
+        
+        const ordersData = snapshot.val();
+        if (ordersData) {
+          // Filter orders by customer and orderType
+          const customerOrders = Object.values(ordersData)
+            .filter(order => 
+              order.orderType === 'wholesale' &&
+              (order.customerId === customerId || order.customerName === customerName)
+            )
+            .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)); // Latest first
+
+          if (customerOrders.length > 0) {
+            const latestOrder = customerOrders[0]; // Most recent order
+
+            if (latestOrder.items && Array.isArray(latestOrder.items)) {
+              latestOrder.items.forEach(item => {
+                priceHistory[item.productId] = {
+                  discountType: item.discountType || 'fixed',
+                  discountValue: item.discountValue || 0,
+                  priceAfterDiscount: item.priceAfterDiscount || item.sellingPrice,
+                  lastUpdated: latestOrder.createdAt
+                };
+              });
+            }
+          }
+        }
       }
 
       setCustomerPriceHistory(priceHistory);
       console.log('📊 Loaded price history for customer:', priceHistory);
       
       if (Object.keys(priceHistory).length > 0) {
-        message.success(`Đã tải lịch sử giá cho ${Object.keys(priceHistory).length} sản phẩm từ đơn trước`);
+        message.success(`Đã tải lịch sử giá cho ${Object.keys(priceHistory).length} sản phẩm`);
       }
     } catch (error) {
       console.error('Error loading customer price history:', error);
       setCustomerPriceHistory({});
+    }
+  };
+
+  // Save customer pricing after order creation
+  const saveCustomerPricing = async (customerId, customerName, items, orderId) => {
+    try {
+      const customerPricingRef = ref(database, 'customerPricing');
+      const snapshot = await get(customerPricingRef);
+      const pricingData = snapshot.val() || {};
+      
+      // Find existing pricing for this customer or create new one
+      let existingPricingKey = null;
+      let existingPricing = null;
+      
+      Object.keys(pricingData).forEach(key => {
+        const pricing = pricingData[key];
+        if ((pricing.customerId === customerId || pricing.customerName === customerName) && pricing.status === 'active') {
+          existingPricingKey = key;
+          existingPricing = pricing;
+        }
+      });
+      
+      // Update or create pricing data
+      const updatedProducts = existingPricing ? { ...existingPricing.products } : {};
+      
+      // Add/update pricing for each product in the order
+      items.forEach(item => {
+        updatedProducts[item.productId] = {
+          discountType: item.discountType,
+          discountValue: item.discountValue,
+          priceAfterDiscount: item.priceAfterDiscount,
+          sellingPrice: item.sellingPrice,
+          lastUpdated: new Date().toISOString(),
+          orderId: orderId
+        };
+      });
+      
+      const pricingDataToSave = {
+        customerId: customerId,
+        customerName: customerName,
+        products: updatedProducts,
+        status: 'active',
+        createdAt: existingPricing ? existingPricing.createdAt : new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      
+      if (existingPricingKey) {
+        // Update existing pricing
+        await set(ref(database, `customerPricing/${existingPricingKey}`), pricingDataToSave);
+      } else {
+        // Create new pricing record
+        await push(customerPricingRef, pricingDataToSave);
+      }
+      
+      console.log('✅ Saved customer pricing:', pricingDataToSave);
+      message.success('Đã cập nhật bảng giá cho khách hàng');
+    } catch (error) {
+      console.error('Error saving customer pricing:', error);
+      message.error('Lỗi khi lưu bảng giá khách hàng');
     }
   };
 
@@ -264,6 +342,14 @@ const CreateOrderWholesale = () => {
             discountValue = priceHistory.discountValue;
             priceAfterDiscount = priceHistory.priceAfterDiscount;
             console.log(`✅ Áp dụng giá cũ cho ${product.productName}:`, priceHistory);
+            
+            // Show notification for applied pricing
+            setTimeout(() => {
+              const discountText = discountType === 'fixed' 
+                ? `-${formatCurrency(discountValue)}` 
+                : `-${discountValue}%`;
+              message.success(`Đã áp dụng giá cho ${product.productName}: ${formatCurrency(priceAfterDiscount)} (${discountText})`);
+            }, 100);
           }
 
           const total = priceAfterDiscount * form.quantity;
@@ -689,6 +775,10 @@ const CreateOrderWholesale = () => {
         console.log('✅ Đã lưu thông tin khách hàng vào danh bạ');
       }
 
+      // Save customer pricing for future orders
+      const customerIdForPricing = selectedCustomer ? selectedCustomer.id : customerName.trim();
+      await saveCustomerPricing(customerIdForPricing, customerName.trim(), items, orderId);
+
       // Save order data and product count before reset
       setCreatedProductCount(items.length);
       setLastCreatedOrder(wholesaleOrder);
@@ -1082,20 +1172,64 @@ const CreateOrderWholesale = () => {
             ))}
 
             <div style={{ textAlign: 'end', marginTop: 16 }}>
-              <Button
-                type="dashed"
-                icon={<PlusOutlined />}
-                onClick={handleAddProduct}
-                size="large"
-                style={{
-                  borderColor: '#007A33',
-                  color: '#007A33',
-                  width: '150px',
-                  fontSize:'12px'
-                }}
-              >
-                Thêm Sản Phẩm
-              </Button>
+              <Space>
+                {selectedCustomer && Object.keys(customerPriceHistory).length > 0 && (
+                  <Button
+                    type="default"
+                    icon={<ReloadOutlined />}
+                    onClick={() => {
+                      let updatedCount = 0;
+                      setProductForms(prevForms =>
+                        prevForms.map(form => {
+                          if (form.productId && customerPriceHistory[form.productId]) {
+                            const priceHistory = customerPriceHistory[form.productId];
+                            updatedCount++;
+                            const total = priceHistory.priceAfterDiscount * form.quantity;
+                            const profit = (priceHistory.priceAfterDiscount - form.importPrice) * form.quantity;
+                            
+                            return {
+                              ...form,
+                              discountType: priceHistory.discountType,
+                              discountValue: priceHistory.discountValue,
+                              priceAfterDiscount: priceHistory.priceAfterDiscount,
+                              total: total,
+                              profit: profit
+                            };
+                          }
+                          return form;
+                        })
+                      );
+                      
+                      if (updatedCount > 0) {
+                        message.success(`Đã cập nhật giá cho ${updatedCount} sản phẩm theo lịch sử của ${selectedCustomer.name}`);
+                      } else {
+                        message.info('Không có sản phẩm nào khớp với lịch sử giá của khách hàng');
+                      }
+                    }}
+                    size="large"
+                    style={{
+                      borderColor: '#52c41a',
+                      color: '#52c41a'
+                    }}
+                  >
+                    Cập nhật giá khách hàng
+                  </Button>
+                )}
+                <Button
+                  type="dashed"
+                  icon={<PlusOutlined />}
+                  onClick={handleAddProduct}
+                  size="large"
+                  style={{
+                    borderColor: '#007A33',
+                    color: '#007A33',
+                    width: '150px',
+                    fontSize:'12px'
+                  }}
+                >
+                  Thêm Sản Phẩm
+                </Button>
+              </Space>
             </div>
           </Card>
         )}
@@ -1284,19 +1418,79 @@ const CreateOrderWholesale = () => {
                       e.currentTarget.style.background = 'white';
                       e.currentTarget.style.borderColor = '#f0f0f0';
                     }}
-                    onClick={() => {
-                      setSelectedCustomer(customer);
-                      setCustomerName(customer.name);
-                      setCustomerPhone(customer.phone || '');
-                      setCustomerAddress(customer.address || '');
-                      setShowCustomerModal(false);
-                      setCustomerSearch('');
-                      
-                      // Load customer's price history from previous orders
-                      loadCustomerPriceHistory(customer.id, customer.name);
-                      
-                      message.success(`Đã chọn khách hàng: ${customer.name}`);
-                    }}
+                    actions={[
+                      <Button
+                        key="select"
+                        type="primary"
+                        size="small"
+                        style={{ background: '#007A33', borderColor: '#007A33' }}
+                        onClick={() => {
+                          setSelectedCustomer(customer);
+                          setCustomerName(customer.name);
+                          setCustomerPhone(customer.phone || '');
+                          setCustomerAddress(customer.address || '');
+                          setShowCustomerModal(false);
+                          setCustomerSearch('');
+                          
+                          // Load customer's price history from previous orders
+                          loadCustomerPriceHistory(customer.id, customer.name);
+                          
+                          message.success(`Đã chọn khách hàng: ${customer.name}`);
+                        }}
+                      >
+                        Chọn
+                      </Button>,
+                      <Button
+                        key="update-pricing"
+                        size="small"
+                        onClick={async () => {
+                          setSelectedCustomer(customer);
+                          setCustomerName(customer.name);
+                          setCustomerPhone(customer.phone || '');
+                          setCustomerAddress(customer.address || '');
+                          setShowCustomerModal(false);
+                          setCustomerSearch('');
+                          
+                          // Load customer's price history from previous orders first
+                          await loadCustomerPriceHistory(customer.id, customer.name);
+                          
+                          // Apply pricing to existing products after loading
+                          setTimeout(() => {
+                            if (productForms.length > 0) {
+                              let updatedCount = 0;
+                              setProductForms(prevForms =>
+                                prevForms.map(form => {
+                                  if (form.productId && customerPriceHistory[form.productId]) {
+                                    const priceHistory = customerPriceHistory[form.productId];
+                                    updatedCount++;
+                                    const total = priceHistory.priceAfterDiscount * form.quantity;
+                                    const profit = (priceHistory.priceAfterDiscount - form.importPrice) * form.quantity;
+                                    
+                                    return {
+                                      ...form,
+                                      discountType: priceHistory.discountType,
+                                      discountValue: priceHistory.discountValue,
+                                      priceAfterDiscount: priceHistory.priceAfterDiscount,
+                                      total: total,
+                                      profit: profit
+                                    };
+                                  }
+                                  return form;
+                                })
+                              );
+                              
+                              if (updatedCount > 0) {
+                                message.success(`Đã cập nhật giá cho ${updatedCount} sản phẩm từ lịch sử khách hàng`);
+                              }
+                            }
+                            
+                            message.success(`Đã chọn và cập nhật giá cho khách hàng: ${customer.name}`);
+                          }, 500);
+                        }}
+                      >
+                        Cập nhật giá
+                      </Button>
+                    ]}
                   >
                     <List.Item.Meta
                       avatar={

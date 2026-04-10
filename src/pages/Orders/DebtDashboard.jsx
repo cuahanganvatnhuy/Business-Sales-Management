@@ -11,14 +11,19 @@ import {
   Statistic,
   Table,
   Progress,
-  Tag
+  Tag,
+  Button,
+  Modal,
+  Dropdown
 } from 'antd';
 import {
   DollarOutlined,
   UserOutlined,
   ClockCircleOutlined,
   CheckCircleOutlined,
-  WarningOutlined
+  WarningOutlined,
+  EyeOutlined,
+  EllipsisOutlined
 } from '@ant-design/icons';
 import { formatCurrency } from '../../utils/format';
 import dayjs from 'dayjs';
@@ -53,6 +58,9 @@ const DebtDashboard = () => {
   const [topDebtors, setTopDebtors] = useState([]);
   const [debtTrend, setDebtTrend] = useState([]);
   const [debtByAge, setDebtByAge] = useState([]);
+  const [detailModalVisible, setDetailModalVisible] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [customerOrders, setCustomerOrders] = useState([]);
 
   // Load data
   useEffect(() => {
@@ -127,6 +135,32 @@ const DebtDashboard = () => {
       .sort((a, b) => b.totalDebt - a.totalDebt)
       .slice(0, 10);
 
+    // Store orders data for each customer
+    Object.keys(customerMap).forEach(customerId => {
+      customerMap[customerId].orders = [];
+    });
+
+    Object.keys(ordersData).forEach(key => {
+      const order = ordersData[key];
+      if (order.orderType === 'wholesale') {
+        // Filter by store
+        if (selectedStore && selectedStore.id !== 'all') {
+          if (order.storeName !== selectedStore.name) {
+            return; // Skip this order
+          }
+        }
+        
+        const customerId = order.customerId || order.customerName;
+        if (customerMap[customerId]) {
+          customerMap[customerId].orders.push({
+            id: key,
+            ...order,
+            storeName: order.storeName || 'N/A'
+          });
+        }
+      }
+    });
+
     console.log('Top Debtors:', topDebtorsArray);
     console.log('Total Customers with Debt:', topDebtorsArray.length);
     
@@ -158,6 +192,13 @@ const DebtDashboard = () => {
       overdueDebt: overdueDebt,
       thisMonthDebt
     });
+  };
+
+  // View customer orders detail
+  const handleViewDetail = (customer) => {
+    setSelectedCustomer(customer);
+    setCustomerOrders(customer.orders || []);
+    setDetailModalVisible(true);
   };
 
   const collectionRate = debtData.totalPaid > 0 
@@ -394,10 +435,219 @@ const DebtDashboard = () => {
                   </div>
                 );
               }
+            },
+            {
+              title: 'Thao Tác',
+              key: 'action',
+              width: 100,
+              align: 'center',
+              render: (_, record) => {
+                const menuItems = [
+                  {
+                    key: 'view',
+                    icon: <EyeOutlined style={{ color: '#1890ff' }} />,
+                    label: 'Xem chi tiết',
+                    onClick: () => handleViewDetail(record)
+                  }
+                ];
+
+                return (
+                  <Dropdown
+                    menu={{ items: menuItems }}
+                    trigger={['click']}
+                    placement="bottomRight"
+                  >
+                    <Button
+                      icon={<EllipsisOutlined style={{ fontSize: 16, fontWeight: 'bold' }} />}
+                      size="small"
+                    />
+                  </Dropdown>
+                );
+              }
             }
           ]}
         />
       </Card>
+
+      {/* Customer Orders Detail Modal */}
+      <Modal
+        title={<><EyeOutlined style={{ marginRight: 8 }} />Chi Tiết Đơn Hàng - {selectedCustomer?.customerName}</>}
+        open={detailModalVisible}
+        onCancel={() => setDetailModalVisible(false)}
+        footer={[
+          <Button key="close" onClick={() => setDetailModalVisible(false)}>
+            Đóng
+          </Button>
+        ]}
+        width={1200}
+      >
+        {selectedCustomer && (
+          <div>
+            {/* Customer Info */}
+            <Card size="small" style={{ marginBottom: 16, background: '#f0f9ff' }}>
+              <Row gutter={16}>
+                <Col span={12}>
+                  <p style={{ margin: '4px 0' }}><strong>Khách Hàng:</strong> {selectedCustomer.customerName}</p>
+                  <p style={{ margin: '4px 0' }}><strong>SĐT:</strong> {selectedCustomer.customerPhone}</p>
+                </Col>
+                <Col span={12}>
+                  <p style={{ margin: '4px 0' }}><strong>Tổng Đơn:</strong> {selectedCustomer.totalOrders} đơn</p>
+                  <p style={{ margin: '4px 0' }}><strong>Tổng Tiền:</strong> <span style={{ color: '#007A33', fontWeight: 600 }}>{formatCurrency(selectedCustomer.totalOrders > 0 ? customerOrders.reduce((sum, order) => sum + (order.subtotal || 0), 0) : 0)}</span></p>
+                </Col>
+              </Row>
+              <Row gutter={16} style={{ marginTop: 12, paddingTop: 12, borderTop: '1px dashed #d9d9d9' }}>
+                <Col span={12}>
+                  <p style={{ margin: '4px 0' }}><strong>Đã Thanh Toán:</strong> <span style={{ color: '#52c41a', fontWeight: 600 }}>{formatCurrency(selectedCustomer.totalPaid)}</span></p>
+                </Col>
+                <Col span={12}>
+                  <p style={{ margin: '4px 0' }}><strong>Còn Nợ:</strong> <span style={{ color: '#ff4d4f', fontWeight: 600, fontSize: 16 }}>{formatCurrency(selectedCustomer.totalDebt)}</span></p>
+                </Col>
+              </Row>
+            </Card>
+
+            {/* Orders Table */}
+            <Table
+              size="small"
+              dataSource={customerOrders}
+              rowKey="id"
+              pagination={false}
+              expandable={{
+                expandedRowRender: (record) => (
+                  <div style={{ padding: '12px', background: '#fafafa' }}>
+                    <strong style={{ marginBottom: 8, display: 'block' }}>📦 Sản phẩm trong đơn:</strong>
+                    {record.items && record.items.length > 0 ? (
+                      <Table
+                        size="small"
+                        dataSource={record.items}
+                        rowKey={(item, index) => index}
+                        pagination={false}
+                        columns={[
+                          {
+                            title: 'Tên sản phẩm',
+                            dataIndex: 'productName',
+                            key: 'productName'
+                          },
+                          {
+                            title: 'SKU',
+                            dataIndex: 'sku',
+                            key: 'sku',
+                            width: 120
+                          },
+                          {
+                            title: 'Số lượng',
+                            dataIndex: 'quantity',
+                            key: 'quantity',
+                            width: 100,
+                            align: 'center',
+                            render: (qty, item) => `${qty} ${item.unit || 'kg'}`
+                          },
+                          {
+                            title: 'Đơn giá',
+                            dataIndex: 'priceAfterDiscount',
+                            key: 'priceAfterDiscount',
+                            width: 120,
+                            align: 'right',
+                            render: (price, item) => formatCurrency(price || item.sellingPrice || 0)
+                          },
+                          {
+                            title: 'Thành tiền',
+                            dataIndex: 'subtotal',
+                            key: 'subtotal',
+                            width: 120,
+                            align: 'right',
+                            render: (amount) => (
+                              <span style={{ color: '#007A33', fontWeight: 600 }}>
+                                {formatCurrency(amount || 0)}
+                              </span>
+                            )
+                          }
+                        ]}
+                      />
+                    ) : (
+                      <p style={{ margin: 0, color: '#666' }}>Không có thông tin sản phẩm</p>
+                    )}
+                  </div>
+                ),
+                expandIcon: ({ expanded, onExpand, record }) =>
+                  expanded ? (
+                    <Button size="small" icon={<span>▼</span>} onClick={e => onExpand(record, e)} />
+                  ) : (
+                    <Button size="small" icon={<span>▶</span>} onClick={e => onExpand(record, e)} />
+                  )
+              }}
+              columns={[
+                {
+                  title: 'STT',
+                  key: 'stt',
+                  width: 50,
+                  render: (_, __, index) => index + 1
+                },
+                {
+                  title: 'Mã Đơn',
+                  dataIndex: 'orderId',
+                  key: 'orderId',
+                  width: 180
+                },
+                {
+                  title: 'Ngày',
+                  dataIndex: 'orderDate',
+                  key: 'orderDate',
+                  width: 100,
+                  render: (date) => dayjs(date).format('DD/MM/YYYY')
+                },
+                {
+                  title: 'Tổng Tiền',
+                  dataIndex: 'subtotal',
+                  key: 'subtotal',
+                  width: 120,
+                  align: 'right',
+                  render: (amount) => formatCurrency(amount || 0)
+                },
+                {
+                  title: 'Đặt Cọc',
+                  dataIndex: 'deposit',
+                  key: 'deposit',
+                  width: 120,
+                  align: 'right',
+                  render: (amount) => (
+                    <span style={{ color: '#52c41a' }}>
+                      {formatCurrency(amount || 0)}
+                    </span>
+                  )
+                },
+                {
+                  title: 'Còn Lại',
+                  dataIndex: 'remainingAmount',
+                  key: 'remainingAmount',
+                  width: 120,
+                  align: 'right',
+                  render: (amount) => (
+                    <span style={{ color: amount > 0 ? '#ff4d4f' : '#52c41a', fontWeight: 600 }}>
+                      {formatCurrency(amount || 0)}
+                    </span>
+                  )
+                },
+                {
+                  title: 'Trạng Thái Thanh Toán',
+                  dataIndex: 'paymentStatus',
+                  key: 'paymentStatus',
+                  width: 130,
+                  align: 'center',
+                  render: (status) => {
+                    const config = {
+                      paid: { text: 'Đã thanh toán', color: 'green' },
+                      partial: { text: 'Thanh toán 1 phần', color: 'orange' },
+                      pending: { text: 'Chưa thanh toán', color: 'red' }
+                    };
+                    const statusConfig = config[status] || config.pending;
+                    return <Tag color={statusConfig.color}>{statusConfig.text}</Tag>;
+                  }
+                }
+              ]}
+            />
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };

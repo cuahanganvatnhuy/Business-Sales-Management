@@ -79,7 +79,7 @@ const DebtManagement = () => {
   const [notesModalVisible, setNotesModalVisible] = useState(false);
   const [customerNotes, setCustomerNotes] = useState('');
 
-  // Load orders and calculate debt by customer
+  // Load orders as individual orders (not grouped by customer)
   useEffect(() => {
     setLoading(true);
     const ordersRef = ref(database, 'salesOrders');
@@ -87,31 +87,14 @@ const DebtManagement = () => {
     const unsubscribe = onValue(ordersRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
-        // Group by customer
-        const customerMap = {};
+        // Create individual order records
+        const ordersArray = [];
         
         Object.keys(data).forEach(key => {
           const order = data[key];
           
           // Only wholesale orders
           if (order.orderType === 'wholesale') {
-            const customerId = order.customerId || order.customerName;
-            const customerName = order.customerName || 'N/A';
-            const customerPhone = order.customerPhone || '';
-            
-            if (!customerMap[customerId]) {
-              customerMap[customerId] = {
-                customerId: customerId,
-                customerName: customerName,
-                customerPhone: customerPhone,
-                totalOrders: 0,
-                totalAmount: 0,
-                totalDeposit: 0,
-                totalRemaining: 0,
-                orders: []
-              };
-            }
-            
             // Calculate amounts
             const subtotal = order.subtotal || 0;
             const deposit = order.deposit || 0;
@@ -120,29 +103,37 @@ const DebtManagement = () => {
               ? order.remainingAmount 
               : (subtotal - deposit);
             
-            customerMap[customerId].totalOrders += 1;
-            customerMap[customerId].totalAmount += subtotal;
-            customerMap[customerId].totalDeposit += deposit;
-            customerMap[customerId].totalRemaining += remaining;
-            customerMap[customerId].orders.push({
+            // Create individual order record
+            ordersArray.push({
               id: key,
-              ...order,
-              storeName: order.storeName || 'N/A'
+              orderId: order.orderId || key,
+              customerName: order.customerName || 'N/A',
+              customerPhone: order.customerPhone || '',
+              customerAddress: order.customerAddress || '',
+              orderDate: order.orderDate,
+              createdAt: order.createdAt,
+              totalOrders: 1, // Always 1 for individual orders
+              totalAmount: subtotal,
+              totalDeposit: deposit,
+              totalRemaining: remaining,
+              debtStatus: remaining === 0 ? 'paid' : 
+                         deposit > 0 ? 'partial' : 'pending',
+              orders: [{
+                id: key,
+                ...order,
+                storeName: order.storeName || 'N/A'
+              }],
+              // Store original order data for reference
+              _originalOrder: order
             });
           }
         });
         
-        // Convert to array
-        const customersArray = Object.values(customerMap)
-          .map(customer => ({
-            ...customer,
-            debtStatus: customer.totalRemaining === 0 ? 'paid' : 
-                       customer.totalDeposit > 0 ? 'partial' : 'pending'
-          }))
-          .sort((a, b) => b.totalRemaining - a.totalRemaining); // Sort by debt desc
+        // Sort by creation date (newest first)
+        ordersArray.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
         
-        setCustomers(customersArray);
-        setFilteredCustomers(customersArray);
+        setCustomers(ordersArray);
+        setFilteredCustomers(ordersArray);
       } else {
         setCustomers([]);
         setFilteredCustomers([]);
@@ -153,77 +144,38 @@ const DebtManagement = () => {
     return () => unsubscribe();
   }, []);
 
-  // Search, status, and store filter
+  // Search, status, and store filter for individual orders
   useEffect(() => {
     let filtered = [...customers];
 
-    // Store filter - recalculate totals for each customer based on store
+    // Store filter - filter individual orders by store
     if (storeFilter === 'current' && selectedStore && selectedStore.id !== 'all') {
-      filtered = filtered.map(customer => {
-        const storeOrders = customer.orders.filter(order => order.storeName === selectedStore.name);
-        if (storeOrders.length === 0) return null; // Remove customer if no orders from this store
-        
-        const totalOrders = storeOrders.length;
-        const totalAmount = storeOrders.reduce((sum, o) => sum + (o.subtotal || 0), 0);
-        const totalDeposit = storeOrders.reduce((sum, o) => sum + (o.deposit || 0), 0);
-        const totalRemaining = storeOrders.reduce((sum, o) => {
-          const subtotal = o.subtotal || 0;
-          const deposit = o.deposit || 0;
-          const remaining = (o.remainingAmount !== undefined) ? o.remainingAmount : (subtotal - deposit);
-          return sum + remaining;
-        }, 0);
-        
-        return {
-          ...customer,
-          totalOrders,
-          totalAmount,
-          totalDeposit,
-          totalRemaining,
-          debtStatus: totalRemaining === 0 ? 'paid' : totalDeposit > 0 ? 'partial' : 'pending'
-        };
-      }).filter(c => c !== null);
+      filtered = filtered.filter(order => 
+        order.orders[0]?.storeName === selectedStore.name
+      );
     } else if (storeFilter !== 'all' && storeFilter !== 'current') {
       // Filter by specific store ID
       const store = stores.find(s => s.id === storeFilter);
       if (store) {
-        filtered = filtered.map(customer => {
-          const storeOrders = customer.orders.filter(order => order.storeName === store.name);
-          if (storeOrders.length === 0) return null;
-          
-          const totalOrders = storeOrders.length;
-          const totalAmount = storeOrders.reduce((sum, o) => sum + (o.subtotal || 0), 0);
-          const totalDeposit = storeOrders.reduce((sum, o) => sum + (o.deposit || 0), 0);
-          const totalRemaining = storeOrders.reduce((sum, o) => {
-            const subtotal = o.subtotal || 0;
-            const deposit = o.deposit || 0;
-            const remaining = (o.remainingAmount !== undefined) ? o.remainingAmount : (subtotal - deposit);
-            return sum + remaining;
-          }, 0);
-          
-          return {
-            ...customer,
-            totalOrders,
-            totalAmount,
-            totalDeposit,
-            totalRemaining,
-            debtStatus: totalRemaining === 0 ? 'paid' : totalDeposit > 0 ? 'partial' : 'pending'
-          };
-        }).filter(c => c !== null);
+        filtered = filtered.filter(order => 
+          order.orders[0]?.storeName === store.name
+        );
       }
     }
-    // If storeFilter === 'all', use all customers as is
+    // If storeFilter === 'all', use all orders as is
 
-    // Search filter
+    // Search filter - search by customer name, phone, or order ID
     if (searchText) {
-      filtered = filtered.filter(customer =>
-        customer.customerName?.toLowerCase().includes(searchText.toLowerCase()) ||
-        customer.customerPhone?.toLowerCase().includes(searchText.toLowerCase())
+      filtered = filtered.filter(order =>
+        order.customerName?.toLowerCase().includes(searchText.toLowerCase()) ||
+        order.customerPhone?.toLowerCase().includes(searchText.toLowerCase()) ||
+        order.orderId?.toLowerCase().includes(searchText.toLowerCase())
       );
     }
 
     // Status filter
     if (statusFilter !== 'all') {
-      filtered = filtered.filter(customer => customer.debtStatus === statusFilter);
+      filtered = filtered.filter(order => order.debtStatus === statusFilter);
     }
 
     setFilteredCustomers(filtered);
@@ -596,26 +548,27 @@ const DebtManagement = () => {
 
   // Export to Excel
   const handleExportExcel = () => {
-    const exportData = filteredCustomers.map((customer, index) => ({
+    const exportData = filteredCustomers.map((order, index) => ({
       'STT': index + 1,
-      'Khách Hàng': customer.customerName,
-      'SĐT': customer.customerPhone,
-      'Số Đơn': customer.totalOrders,
-      'Tổng Tiền': customer.totalAmount,
-      'Đã Thanh Toán': customer.totalDeposit,
-      'Còn Nợ': customer.totalRemaining,
-      'Trạng Thái': customer.debtStatus === 'paid' ? 'Đã thanh toán' : 
-                   customer.debtStatus === 'partial' ? 'Nợ 1 phần' : 'Chưa thanh toán'
+      'Mã Đơn Hàng': order.orderId,
+      'Khách Hàng': order.customerName,
+      'SÐT': order.customerPhone,
+      'Ngày Đặt': order.orderDate ? dayjs(order.orderDate).format('DD/MM/YYYY') : 'N/A',
+      'Tổng Tiền': order.totalAmount,
+      'Đã Thanh Toán': order.totalDeposit,
+      'Còn Nợ': order.totalRemaining,
+      'Trang Thái': order.debtStatus === 'paid' ? 'Ðã Thanh Toán' : 
+                   order.debtStatus === 'partial' ? 'Nợ 1 Phần' : 'Chưa Thanh Toán'
     }));
 
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Công Nợ Khách Hàng');
-    XLSX.writeFile(wb, `CongNoKhachHang_${dayjs().format('YYYYMMDD')}.xlsx`);
-    message.success('Đã xuất file Excel thành công!');
+    XLSX.utils.book_append_sheet(wb, ws, 'Công N Ðon Hàng');
+    XLSX.writeFile(wb, `CongNoDonHang_${dayjs().format('YYYYMMDD')}.xlsx`);
+    message.success('Ðã xuát file Excel thành công!');
   };
 
-  // Table columns
+  // Table columns for individual orders
   const columns = [
     {
       title: 'STT',
@@ -625,34 +578,41 @@ const DebtManagement = () => {
       render: (_, __, index) => index + 1
     },
     {
+      title: 'Mã Đơn Hàng',
+      dataIndex: 'orderId',
+      key: 'orderId',
+      width: 150,
+      render: (orderId) => (
+        <div style={{ fontWeight: 600, color: '#007A33' }}>
+          {orderId}
+        </div>
+      )
+    },
+    {
       title: 'Khách Hàng',
       dataIndex: 'customerName',
       key: 'customerName',
-      width: 200,
+      width: 180,
       render: (name, record) => (
         <div>
-          <div style={{ fontWeight: 600, color: '#007A33' }}>{name}</div>
+          <div style={{ fontWeight: 600 }}>{name}</div>
           <div style={{ fontSize: 12, color: '#666' }}>{record.customerPhone}</div>
         </div>
       )
     },
     {
-      title: 'Số Đơn',
-      dataIndex: 'totalOrders',
-      key: 'totalOrders',
-      width: 100,
+      title: 'Ngày Đặt',
+      dataIndex: 'orderDate',
+      key: 'orderDate',
+      width: 120,
       align: 'center',
-      render: (count) => (
-        <Tag color="blue" style={{ fontSize: 14, fontWeight: 600 }}>
-          {count} đơn
-        </Tag>
-      )
+      render: (date) => date ? dayjs(date).format('DD/MM/YYYY') : 'N/A'
     },
     {
       title: 'Tổng Tiền',
       dataIndex: 'totalAmount',
       key: 'totalAmount',
-      width: 150,
+      width: 130,
       align: 'right',
       render: (amount) => (
         <span style={{ fontWeight: 600 }}>
@@ -664,7 +624,7 @@ const DebtManagement = () => {
       title: 'Đã Thanh Toán',
       dataIndex: 'totalDeposit',
       key: 'totalDeposit',
-      width: 150,
+      width: 120,
       align: 'right',
       render: (amount) => (
         <span style={{ color: '#52c41a', fontWeight: 600 }}>
@@ -676,7 +636,7 @@ const DebtManagement = () => {
       title: 'Còn Nợ',
       dataIndex: 'totalRemaining',
       key: 'totalRemaining',
-      width: 150,
+      width: 130,
       align: 'right',
       render: (amount) => (
         <span style={{ color: amount > 0 ? '#ff4d4f' : '#52c41a', fontWeight: 600, fontSize: 16 }}>
@@ -685,14 +645,14 @@ const DebtManagement = () => {
       )
     },
     {
-      title: 'Trạng Thái',
+      title: 'Trang Thái',
       dataIndex: 'debtStatus',
       key: 'debtStatus',
-      width: 140,
+      width: 120,
       align: 'center',
       render: (status) => {
         const config = {
-          paid: { text: 'Đã thanh toán', color: 'green' },
+          paid: { text: 'Ðã thanh toán', color: 'green' },
           partial: { text: 'Nợ 1 phần', color: 'orange' },
           pending: { text: 'Chưa thanh toán', color: 'red' }
         };
@@ -733,13 +693,13 @@ const DebtManagement = () => {
           {
             key: 'view',
             icon: <EyeOutlined style={{ color: '#1890ff' }} />,
-            label: 'Xem chi tiết',
+            label: 'Xem chi tiét',
             onClick: () => handleViewDetail(record)
           },
           {
             key: 'print',
             icon: <PrinterOutlined style={{ color: '#007A33' }} />,
-            label: 'In phiếu nợ',
+            label: 'In phiểu nợ',
             onClick: () => handlePrintDebt(record)
           }
         ];
@@ -760,11 +720,11 @@ const DebtManagement = () => {
     }
   ];
 
-  // Calculate statistics
-  const totalCustomers = filteredCustomers.length;
-  const totalDebt = filteredCustomers.reduce((sum, c) => sum + c.totalRemaining, 0);
-  const totalPaid = filteredCustomers.reduce((sum, c) => sum + c.totalDeposit, 0);
-  const customersWithDebt = filteredCustomers.filter(c => c.totalRemaining > 0).length;
+  // Calculate statistics for individual orders
+  const totalOrders = filteredCustomers.length;
+  const totalDebt = filteredCustomers.reduce((sum, order) => sum + order.totalRemaining, 0);
+  const totalPaid = filteredCustomers.reduce((sum, order) => sum + order.totalDeposit, 0);
+  const ordersWithDebt = filteredCustomers.filter(order => order.totalRemaining > 0).length;
 
   return (
     <div style={{ padding: '5px' }}>
@@ -780,7 +740,7 @@ const DebtManagement = () => {
           <DollarOutlined style={{ fontSize: 32, color: '#007A33' }} />
           <div>
             <h1 className="page-title" style={{ margin: 0, color: '#007A33' }}>Công Nợ Khách Hàng Sỉ</h1>
-            <p style={{ margin: 0, color: '#666' }}>Quản lý công nợ theo từng khách hàng</p>
+            <p style={{ margin: 0, color: '#666' }}>Quán lý công nợ theo từng đơn hàng</p>
           </div>
         </div>
       </Card>
@@ -790,9 +750,9 @@ const DebtManagement = () => {
         <Col xs={24} sm={12} md={6}>
           <Card>
             <Statistic
-              title="Tổng Khách Hàng"
-              value={totalCustomers}
-              prefix={<UserOutlined style={{ color: '#1890ff' }} />}
+              title="Tổng Đơn Hàng"
+              value={totalOrders}
+              prefix={<ShoppingOutlined style={{ color: '#1890ff' }} />}
               valueStyle={{ color: '#1890ff' }}
             />
           </Card>
@@ -800,8 +760,8 @@ const DebtManagement = () => {
         <Col xs={24} sm={12} md={6}>
           <Card>
             <Statistic
-              title="Khách Đang Nợ"
-              value={customersWithDebt}
+              title="Đơn Hàng Nợ"
+              value={ordersWithDebt}
               prefix={<ShoppingOutlined style={{ color: '#faad14' }} />}
               valueStyle={{ color: '#faad14' }}
             />
@@ -829,7 +789,7 @@ const DebtManagement = () => {
 
       {/* Table */}
       <Card
-        title="Danh Sách Công Nợ"
+        title="Danh Sách Công Nợ Theo Đơn Hàng"
         extra={
           <Space>
             <Button
@@ -881,10 +841,10 @@ const DebtManagement = () => {
               onChange={setStatusFilter}
               style={{ width: '100%' }}
             >
-              <Option value="all">Tất cả TT</Option>
-              <Option value="pending">Chưa TT</Option>
+              <Option value="all">Tất cả Thanh Toán</Option>
+              <Option value="pending">Chưa Thanh Toán</Option>
               <Option value="partial">Nợ 1 phần</Option>
-              <Option value="paid">Đã TT</Option>
+              <Option value="paid">Đã Thanh Toán</Option>
             </Select>
           </Col>
         </Row>
@@ -893,13 +853,13 @@ const DebtManagement = () => {
           loading={loading}
           columns={columns}
           dataSource={filteredCustomers}
-          rowKey="customerId"
+          rowKey="id"
           scroll={{ x: 1200 }}
           pagination={{
             total: filteredCustomers.length,
             pageSize: 10,
             showSizeChanger: true,
-            showTotal: (total) => `Tổng ${total} khách hàng`
+            showTotal: (total) => `Tóng ${total} Ðon hàng`
           }}
         />
       </Card>
@@ -978,11 +938,11 @@ const DebtManagement = () => {
                           },
                           {
                             title: 'Đơn giá',
-                            dataIndex: 'sellingPrice',
-                            key: 'sellingPrice',
+                            dataIndex: 'priceAfterDiscount',
+                            key: 'priceAfterDiscount',
                             width: 120,
                             align: 'right',
-                            render: (price) => formatCurrency(price || 0)
+                            render: (price, item) => formatCurrency(price || item.sellingPrice || 0)
                           },
                           {
                             title: 'Thành tiền',
@@ -1063,7 +1023,7 @@ const DebtManagement = () => {
                   )
                 },
                 {
-                  title: 'TT Thanh Toán',
+                  title: 'Trạng Thái ',
                   dataIndex: 'paymentStatus',
                   key: 'paymentStatus',
                   width: 130,
@@ -1071,8 +1031,8 @@ const DebtManagement = () => {
                   render: (status) => {
                     const config = {
                       paid: { text: 'Đã thanh toán', color: 'green' },
-                      partial: { text: 'TT 1 phần', color: 'orange' },
-                      pending: { text: 'Chưa TT', color: 'red' }
+                      partial: { text: 'Thành toán 1 phần', color: 'orange' },
+                      pending: { text: 'Chưa thanh toán', color: 'red' }
                     };
                     const statusConfig = config[status] || config.pending;
                     return <Tag color={statusConfig.color}>{statusConfig.text}</Tag>;

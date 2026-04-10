@@ -485,7 +485,7 @@ const ManageOrdersWholesale = () => {
                   <td>${item.sku}</td>
                   <td>${item.quantity}</td>
                   <td>${item.unit || 'kg'}</td>
-                  <td>${formatCurrency(item.sellingPrice)}</td>
+                  <td>${formatCurrency(item.priceAfterDiscount || item.sellingPrice)}</td>
                   <td>${formatCurrency(item.subtotal)}</td>
                 </tr>
               `).join('') 
@@ -719,7 +719,7 @@ const ManageOrdersWholesale = () => {
                   <td>${item.sku}</td>
                   <td>${item.quantity}</td>
                   <td>${item.unit || 'kg'}</td>
-                  <td>${formatCurrency(item.sellingPrice)}</td>
+                  <td>${formatCurrency(item.priceAfterDiscount || item.sellingPrice)}</td>
                   <td>${formatCurrency(item.subtotal)}</td>
                 </tr>
               `).join('') 
@@ -902,7 +902,7 @@ const ManageOrdersWholesale = () => {
                       <td>${item.sku}</td>
                       <td>${item.quantity}</td>
                       <td>${item.unit || 'kg'}</td>
-                      <td>${formatCurrency(item.sellingPrice)}</td>
+                      <td>${formatCurrency(item.priceAfterDiscount || item.sellingPrice)}</td>
                       <td>${formatCurrency(item.subtotal)}</td>
                     </tr>
                   `).join('') 
@@ -1085,7 +1085,7 @@ const ManageOrdersWholesale = () => {
                       <td>${item.sku}</td>
                       <td>${item.quantity}</td>
                       <td>${item.unit || 'kg'}</td>
-                      <td>${formatCurrency(item.sellingPrice)}</td>
+                      <td>${formatCurrency(item.priceAfterDiscount || item.sellingPrice)}</td>
                       <td>${formatCurrency(item.subtotal)}</td>
                     </tr>
                   `).join('') 
@@ -1136,13 +1136,13 @@ const ManageOrdersWholesale = () => {
   // Export to Excel
   const handleExportExcel = () => {
     const exportData = filteredOrders.map((order, index) => {
-      // Calculate selling price (average if multiple items)
+      // Calculate selling price (average if multiple items) - use priceAfterDiscount for wholesale
       let sellingPrice = 0;
       if (order.items && order.items.length > 0) {
         if (order.items.length === 1) {
-          sellingPrice = order.items[0].sellingPrice || 0;
+          sellingPrice = order.items[0].priceAfterDiscount || order.items[0].sellingPrice || 0;
         } else {
-          sellingPrice = Math.round(order.items.reduce((sum, item) => sum + (item.sellingPrice || 0), 0) / order.items.length);
+          sellingPrice = Math.round(order.items.reduce((sum, item) => sum + (item.priceAfterDiscount || item.sellingPrice || 0), 0) / order.items.length);
         }
       }
       
@@ -1276,18 +1276,18 @@ const ManageOrdersWholesale = () => {
       width: 120,
       align: 'right',
       render: (price, record) => {
-        // If has items array, calculate average or show first item price
+        // If has items array, calculate average or show first item price - use priceAfterDiscount for wholesale
         if (record.items && record.items.length > 0) {
           if (record.items.length === 1) {
-            return formatCurrency(record.items[0].sellingPrice || 0);
+            return formatCurrency(record.items[0].priceAfterDiscount || record.items[0].sellingPrice || 0);
           } else {
-            // Show average price for multiple items
-            const avgPrice = record.items.reduce((sum, item) => sum + (item.sellingPrice || 0), 0) / record.items.length;
+            // Show average price for multiple items - use priceAfterDiscount for wholesale
+            const avgPrice = record.items.reduce((sum, item) => sum + (item.priceAfterDiscount || item.sellingPrice || 0), 0) / record.items.length;
             return formatCurrency(Math.round(avgPrice));
           }
         }
         return formatCurrency(price || 0);
-      }
+      },
     },
     {
       title: 'Tổng Tiền',
@@ -1731,7 +1731,7 @@ const ManageOrdersWholesale = () => {
                           <strong>SL:</strong> {item.quantity} {item.unit}
                         </Col>
                         <Col span={3}>
-                          <strong>Giá:</strong> {formatCurrency(item.sellingPrice)}
+                          <strong>Giá:</strong> {formatCurrency(item.priceAfterDiscount || item.sellingPrice)}
                         </Col>
                         <Col span={3}>
                           <strong>Tổng:</strong> <span style={{ color: '#007A33' }}>{formatCurrency(item.subtotal)}</span>
@@ -1895,7 +1895,7 @@ const ManageOrdersWholesale = () => {
                   key: 'sellingPrice',
                   width: 120,
                   align: 'right',
-                  render: (price) => formatCurrency(price || 0)
+                  render: (price, record) => formatCurrency(record.priceAfterDiscount || price || 0)
                 },
                 {
                   title: 'Thành Tiền',

@@ -500,14 +500,18 @@ export const printWholesaleInvoice = (order) => {
   // Add products to invoice
   if (order.items && Array.isArray(order.items)) {
     order.items.forEach((item, index) => {
+      // Use priceAfterDiscount for wholesale pricing
+      const unitPrice = item.priceAfterDiscount || item.sellingPrice || 0;
+      const totalPrice = unitPrice * (item.quantity || 0);
+      
       invoiceHTML += `
                 <tr>
                     <td style="text-align: center;">${index + 1}</td>
                     <td>${item.productName || 'N/A'}</td>
                     <td style="text-align: center;">${item.sku || 'N/A'}</td>
                     <td style="text-align: center;">${item.quantity || 0}</td>
-                    <td style="text-align: right;">${formatCurrency(item.sellingPrice || 0)}</td>
-                    <td style="text-align: right;">${formatCurrency(item.totalAmount || 0)}</td>
+                    <td style="text-align: right;">${formatCurrency(unitPrice)}</td>
+                    <td style="text-align: right;">${formatCurrency(totalPrice)}</td>
                 </tr>`;
     });
   }
