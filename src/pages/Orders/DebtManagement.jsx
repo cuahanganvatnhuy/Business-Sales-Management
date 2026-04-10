@@ -63,21 +63,23 @@ const DebtManagement = () => {
   const [customers, setCustomers] = useState([]);
   const [filteredCustomers, setFilteredCustomers] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [searchText, setSearchText] = useState('');
-  const [storeFilter, setStoreFilter] = useState('current');
-  const [statusFilter, setStatusFilter] = useState('all');
   const [detailModalVisible, setDetailModalVisible] = useState(false);
+  const [paymentModalVisible, setPaymentModalVisible] = useState(false);
+  const [historyModalVisible, setHistoryModalVisible] = useState(false);
+  const [notesModalVisible, setNotesModalVisible] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [customerOrders, setCustomerOrders] = useState([]);
-  const [paymentModalVisible, setPaymentModalVisible] = useState(false);
+  const [paymentHistory, setPaymentHistory] = useState([]);
+  const [customerNotes, setCustomerNotes] = useState('');
+  const [selectedRows, setSelectedRows] = useState([]);
+  const [selectedCustomerForDebt, setSelectedCustomerForDebt] = useState(null);
+  const [searchText, setSearchText] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [storeFilter, setStoreFilter] = useState('all');
   const [paymentAmount, setPaymentAmount] = useState(0);
   const [paymentDate, setPaymentDate] = useState(dayjs());
   const [paymentNote, setPaymentNote] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
-  const [historyModalVisible, setHistoryModalVisible] = useState(false);
-  const [paymentHistory, setPaymentHistory] = useState([]);
-  const [notesModalVisible, setNotesModalVisible] = useState(false);
-  const [customerNotes, setCustomerNotes] = useState('');
 
   // Load orders as individual orders (not grouped by customer)
   useEffect(() => {
@@ -186,6 +188,192 @@ const DebtManagement = () => {
     setSelectedCustomer(record);
     setCustomerOrders(record.orders || []);
     setDetailModalVisible(true);
+  };
+
+  // Handle row selection for debt statement
+  const handleRowSelection = {
+    selectedRowKeys: selectedRows,
+    onChange: (selectedRowKeys, selectedRows) => {
+      setSelectedRows(selectedRowKeys);
+      
+      // Group selected orders by customer
+      const customerGroups = {};
+      selectedRows.forEach(row => {
+        const customerKey = `${row.customerName}_${row.customerPhone}`;
+        if (!customerGroups[customerKey]) {
+          customerGroups[customerKey] = {
+            customerName: row.customerName,
+            customerPhone: row.customerPhone,
+            customerAddress: row.customerAddress,
+            orders: [],
+            totalAmount: 0,
+            totalDeposit: 0,
+            totalRemaining: 0
+          };
+        }
+        customerGroups[customerKey].orders.push(row._originalOrder);
+        customerGroups[customerKey].totalAmount += row.totalAmount;
+        customerGroups[customerKey].totalDeposit += row.totalDeposit;
+        customerGroups[customerKey].totalRemaining += row.totalRemaining;
+      });
+      
+      // Set selected customer for debt statement (if only one customer)
+      const customerKeys = Object.keys(customerGroups);
+      if (customerKeys.length === 1) {
+        setSelectedCustomerForDebt(customerGroups[customerKeys[0]]);
+      } else {
+        setSelectedCustomerForDebt(null);
+      }
+    },
+    getCheckboxProps: (record) => ({
+      disabled: record.totalRemaining === 0, // Disable checkbox for paid orders
+    }),
+  };
+
+  // Print multiple debt statements
+  const handlePrintSelectedDebts = () => {
+    if (selectedRows.length === 0) {
+      message.warning('Vui lòng chọn ít nhất một đơn hàng có nợ!');
+      return;
+    }
+
+    // Group selected orders by customer
+    const customerGroups = {};
+    filteredCustomers.forEach(order => {
+      if (selectedRows.includes(order.id)) {
+        const customerKey = `${order.customerName}_${order.customerPhone}`;
+        if (!customerGroups[customerKey]) {
+          customerGroups[customerKey] = {
+            customerName: order.customerName,
+            customerPhone: order.customerPhone,
+            customerAddress: order.customerAddress,
+            orders: [],
+            totalAmount: 0,
+            totalDeposit: 0,
+            totalRemaining: 0
+          };
+        }
+        customerGroups[customerKey].orders.push(order._originalOrder);
+        customerGroups[customerKey].totalAmount += order.totalAmount;
+        customerGroups[customerKey].totalDeposit += order.totalDeposit;
+        customerGroups[customerKey].totalRemaining += order.totalRemaining;
+      }
+    });
+
+    // Print debt statement for each customer
+    Object.values(customerGroups).forEach((customerData, index) => {
+      setTimeout(() => {
+        printDebtStatement(customerData);
+      }, index * 500); // Delay between prints
+    });
+  };
+
+  // Print debt statement function
+  const printDebtStatement = (customerData) => {
+    const printWindow = window.open('', '_blank', 'width=800,height=600');
+    
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Phiếu Công Nợ Tổng Hợp</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 20px; }
+          .header { text-align: center; margin-bottom: 30px; }
+          .header h1 { color: #007A33; margin: 0; font-size: 24px; }
+          .info { margin-bottom: 20px; }
+          .info p { margin: 5px 0; }
+          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+          th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+          th { background-color: #007A33; color: white; }
+          .total { text-align: right; margin-top: 20px; font-size: 18px; font-weight: bold; }
+          .debt { color: #ff4d4f; }
+          .paid { color: #52c41a; }
+          .summary { background: #f5f5f5; padding: 15px; margin-top: 20px; border-radius: 5px; }
+          .footer { text-align: center; margin-top: 40px; color: #666; }
+          @media print {
+            body { padding: 15px; }
+            .no-print { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>PHIẾU CÔNG NỢ TỔNG HỢP</h1>
+          <p>Ngày: ${dayjs().format('DD/MM/YYYY HH:mm')}</p>
+        </div>
+        
+        <div class="info">
+          <p><strong>Khách hàng:</strong> ${customerData.customerName}</p>
+          <p><strong>SĐT:</strong> ${customerData.customerPhone}</p>
+          ${customerData.customerAddress ? `<p><strong>Địa chỉ:</strong> ${customerData.customerAddress}</p>` : ''}
+          <p><strong>Số đơn hàng nợ:</strong> ${customerData.orders.filter(order => (order.remainingAmount || 0) > 0).length} đơn</p>
+        </div>
+        
+        <table>
+          <thead>
+            <tr>
+              <th>STT</th>
+              <th>Mã Đơn Hàng</th>
+              <th>Ngày Đặt</th>
+              <th>Tổng Tiền</th>
+              <th>Đã Thanh Toán</th>
+              <th>Còn Nợ</th>
+              <th>Trạng Thái</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${customerData.orders.map((order, index) => {
+              const subtotal = order.subtotal || 0;
+              const deposit = order.deposit || 0;
+              const remaining = (order.remainingAmount !== undefined) 
+                ? order.remainingAmount 
+                : (subtotal - deposit);
+              const status = remaining === 0 ? 'Đã thanh toán' : 
+                           deposit > 0 ? 'Thanh toán 1 phần' : 'Chưa thanh toán';
+              const statusColor = remaining === 0 ? 'green' : 
+                               deposit > 0 ? 'orange' : 'red';
+              
+              return `
+                <tr>
+                  <td>${index + 1}</td>
+                  <td>${order.orderId || order.id}</td>
+                  <td>${dayjs(order.orderDate).format('DD/MM/YYYY')}</td>
+                  <td style="text-align: right; font-weight: 600;">${formatCurrency(subtotal)}</td>
+                  <td style="text-align: right; color: #52c41a;">${formatCurrency(deposit)}</td>
+                  <td style="text-align: right; color: ${remaining > 0 ? '#ff4d4f' : '#52c41a'}; font-weight: 600;">${formatCurrency(remaining)}</td>
+                  <td style="text-align: center;">
+                    <span style="color: ${statusColor}; font-weight: 600;">${status}</span>
+                  </td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+        
+        <div class="summary">
+          <h3>TỔNG HỢP CÔNG NỢ</h3>
+          <p><strong>Tổng giá trị đơn hàng:</strong> <span class="paid">${formatCurrency(customerData.totalAmount)}</span></p>
+          <p><strong>Tổng đã thanh toán:</strong> <span class="paid">${formatCurrency(customerData.totalDeposit)}</span></p>
+          <p><strong>Tổng công nợ:</strong> <span class="debt" style="font-size: 20px;">${formatCurrency(customerData.totalRemaining)}</span></p>
+          <p><strong>Số đơn hàng:</strong> ${customerData.orders.length} đơn</p>
+          <p><strong>Số đơn còn nợ:</strong> ${customerData.orders.filter(order => ((order.remainingAmount !== undefined) ? order.remainingAmount : (order.subtotal - (order.deposit || 0))) > 0).length} đơn</p>
+        </div>
+        
+        <div class="footer">
+          <p>Phiếu này được tạo tự động từ hệ thống quản lý bán hàng</p>
+          <p>In lúc: ${dayjs().format('DD/MM/YYYY HH:mm:ss')}</p>
+        </div>
+      </body>
+      </html>
+    `;
+    
+    printWindow.document.write(html);
+    printWindow.document.close();
+    setTimeout(() => {
+      printWindow.print();
+    }, 250);
   };
 
   // Open payment modal
@@ -799,6 +987,17 @@ const DebtManagement = () => {
             >
               Xuất Excel
             </Button>
+            <Button
+              icon={<PrinterOutlined />}
+              onClick={handlePrintSelectedDebts}
+              disabled={selectedRows.length === 0}
+              style={{ 
+                color: selectedRows.length > 0 ? '#007A33' : '#999', 
+                borderColor: selectedRows.length > 0 ? '#007A33' : '#999' 
+              }}
+            >
+              In Phiếu Nợ Đã Chọn ({selectedRows.length})
+            </Button>
           </Space>
         }
         style={{
@@ -854,6 +1053,7 @@ const DebtManagement = () => {
           columns={columns}
           dataSource={filteredCustomers}
           rowKey="id"
+          rowSelection={handleRowSelection}
           scroll={{ x: 1200 }}
           pagination={{
             total: filteredCustomers.length,
