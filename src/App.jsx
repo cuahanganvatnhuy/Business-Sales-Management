@@ -17,6 +17,7 @@ import { Inventory, Transactions, UsageReport, OrderReport } from './pages/Wareh
 import ShippingCost from './pages/ShippingCost';
 import { GlobalInvoice, StoreInvoice, PaymentInvoice } from './pages/Invoices';
 import { FinancialTransactions, ProfitOverview, EcommerceProfit, RetailProfit, WholesaleProfit, WithdrawalHistory } from './pages/Finance';
+import ShopProfitManagement from './pages/Financial/ManualProfitManagement';
 import StaffManagement from './pages/HR/StaffManagement';
 import RoleManagement from './pages/HR/RoleManagement';
 import Profile from './pages/Profile';
@@ -120,6 +121,7 @@ function App() {
                 <Route path="ecommerce-profit" element={<EcommerceProfit />} />
                 <Route path="retail-profit" element={<RetailProfit />} />
                 <Route path="wholesale-profit" element={<WholesaleProfit />} />
+                <Route path="manual-profit" element={<ShopProfitManagement />} />
                 <Route path="withdrawal-history" element={<WithdrawalHistory />} />
               </Route>
 

@@ -20,7 +20,8 @@ import {
   Popconfirm,
   Dropdown,
   Modal,
-  Tooltip
+  Tooltip,
+  Checkbox
 } from 'antd';
 import {
   ShoppingOutlined,
@@ -80,6 +81,8 @@ const ManageOrdersTMDT = () => {
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [selectedRowKeys, setSelectedRowKeys] = useState([]);
   const [expandedRowKeys, setExpandedRowKeys] = useState([]);
+  const [productSearchValue, setProductSearchValue] = useState('');
+  const [skuSearchValue, setSkuSearchValue] = useState('');
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
@@ -527,6 +530,7 @@ const ManageOrdersTMDT = () => {
       console.log('📦 After category filter:', filtered.length, 'orders found');
     }
 
+    
     // Update filtered orders and pagination
     setFilteredOrders(filtered);
     
@@ -539,7 +543,8 @@ const ManageOrdersTMDT = () => {
     
     console.log('✅ Applied all filters. Total filtered orders:', filtered.length);
   }, [searchText, dateRange, platformFilter, categoryFilter, storeFilter, orders, selectedStore, stores]);
-  
+
+    
   // Handle pagination changes
   const handleTableChange = (pagination, filters, sorter) => {
     setTablePagination(prev => ({
@@ -1183,6 +1188,79 @@ const ManageOrdersTMDT = () => {
       dataIndex: 'productName',
       key: 'productName',
       width: 250,
+      filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) => {
+        const allProducts = [];
+        filteredOrders.forEach(order => {
+          if (order.items && Array.isArray(order.items)) {
+            order.items.forEach(item => {
+              if (item.productName) {
+                allProducts.push(item.productName);
+              }
+            });
+          }
+        });
+        
+        const uniqueProducts = Array.from(new Set(allProducts)).sort();
+        const filteredProducts = uniqueProducts.filter(product => 
+          product.toLowerCase().includes(productSearchValue.toLowerCase())
+        );
+
+        return (
+          <div style={{ padding: 8, maxHeight: 400, overflow: 'auto' }}>
+            <Input
+              size="small"
+              placeholder="Tìm kiếm sản phẩm..."
+              value={productSearchValue}
+              onChange={(e) => setProductSearchValue(e.target.value)}
+              style={{ width: '100%', marginBottom: 8, display: 'block' }}
+              prefix={<SearchOutlined style={{ color: 'white' }} />}
+            />
+            <div style={{ maxHeight: 250, overflow: 'auto' }}>
+              {filteredProducts.map(product => (
+                <div key={product} style={{ padding: '1px 4px', fontSize: 12, lineHeight: '20px' }}>
+                  <Checkbox
+                    checked={selectedKeys.includes(product)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedKeys([...selectedKeys, product]);
+                      } else {
+                        setSelectedKeys(selectedKeys.filter(key => key !== product));
+                      }
+                    }}
+                    style={{ fontSize: 12 }}
+                  >
+                    <span style={{ fontSize: 12, lineHeight: '16px' }}>{product}</span>
+                  </Checkbox>
+                </div>
+              ))}
+            </div>
+            <div style={{ borderTop: '1px solid #d9d9d9', paddingTop: 1, marginTop: 1 }}>
+              <Space>
+                <Button
+                  type="primary"
+                  onClick={() => confirm()}
+                  style={{ width: 80, height: 24, fontSize: 12, padding: '0 8px' }}
+                >
+                  Đồng ý
+                </Button>
+                <Button onClick={() => {
+                  clearFilters();
+                  setProductSearchValue('');
+                }} style={{ width: 80, height: 24, fontSize: 12, padding: '0 8px' }}>
+                  Bỏ lọc
+                </Button>
+              </Space>
+            </div>
+          </div>
+        );
+      },
+      filterIcon: (filtered) => (
+        <SearchOutlined style={{ color: filtered ? 'white' : 'white' }} />
+      ),
+      onFilter: (value, record) => {
+        if (!record.items || !Array.isArray(record.items)) return false;
+        return record.items.some(item => item.productName === value);
+      },
       render: (_, record) => {
         if (!record.items || !Array.isArray(record.items)) return 'N/A';
         
@@ -1229,7 +1307,7 @@ const ManageOrdersTMDT = () => {
       filters: [
         { text: 'Chưa phân loại', value: 'Chưa phân loại' },
         ...Array.from(new Set(
-          processedOrders.flatMap(order => 
+          filteredOrders.flatMap(order => 
             (order.items || []).map(item => item.categoryName).filter(Boolean)
           )
         )).map(cat => ({
@@ -1251,6 +1329,79 @@ const ManageOrdersTMDT = () => {
       title: 'SKU',
       key: 'sku',
       width: 150,
+      filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) => {
+        const allSkus = [];
+        filteredOrders.forEach(order => {
+          if (order.items && Array.isArray(order.items)) {
+            order.items.forEach(item => {
+              if (item.sku) {
+                allSkus.push(item.sku);
+              }
+            });
+          }
+        });
+        
+        const uniqueSkus = Array.from(new Set(allSkus)).sort();
+        const filteredSkus = uniqueSkus.filter(sku => 
+          sku.toLowerCase().includes(skuSearchValue.toLowerCase())
+        );
+
+        return (
+          <div style={{ padding: 8, maxHeight: 400, overflow: 'auto' }}>
+            <Input
+              size="small"
+              placeholder="Tìm kiếm SKU..."
+              value={skuSearchValue}
+              onChange={(e) => setSkuSearchValue(e.target.value)}
+              style={{ width: '100%', marginBottom: 8, display: 'block' }}
+              prefix={<SearchOutlined style={{ color: 'white' }} />}
+            />
+            <div style={{ maxHeight: 250, overflow: 'auto' }}>
+              {filteredSkus.map(sku => (
+                <div key={sku} style={{ padding: '1px 4px', fontSize: 12, lineHeight: '20px' }}>
+                  <Checkbox
+                    checked={selectedKeys.includes(sku)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedKeys([...selectedKeys, sku]);
+                      } else {
+                        setSelectedKeys(selectedKeys.filter(key => key !== sku));
+                      }
+                    }}
+                    style={{ fontSize: 12 }}
+                  >
+                    <span style={{ fontSize: 12, lineHeight: '16px' }}>{sku}</span>
+                  </Checkbox>
+                </div>
+              ))}
+            </div>
+            <div style={{ borderTop: '1px solid #d9d9d9', paddingTop: 1, marginTop: 1 }}>
+              <Space>
+                <Button
+                  type="primary"
+                  onClick={() => confirm()}
+                  style={{ width: 80, height: 24, fontSize: 12, padding: '0 8px' }}
+                >
+                  Đồng ý
+                </Button>
+                <Button onClick={() => {
+                  clearFilters();
+                  setSkuSearchValue('');
+                }} style={{ width: 80, height: 24, fontSize: 12, padding: '0 8px' }}>
+                  Bỏ lọc
+                </Button>
+              </Space>
+            </div>
+          </div>
+        );
+      },
+      filterIcon: (filtered) => (
+        <SearchOutlined style={{ color: filtered ? 'white' : 'white' }} />
+      ),
+      onFilter: (value, record) => {
+        if (!record.items || !Array.isArray(record.items)) return false;
+        return record.items.some(item => item.sku === value);
+      },
       render: (_, record) => {
         if (!record.items || !Array.isArray(record.items)) return 'N/A';
         
@@ -1710,7 +1861,7 @@ const ManageOrdersTMDT = () => {
             <Col flex="1" style={{ minWidth: '200px' }}>
               <Input
                 placeholder="Tìm kiếm..."
-                prefix={<SearchOutlined />}
+                prefix={<SearchOutlined style={{ color: 'white' }} />}
                 value={searchText}
                 onChange={(e) => setSearchText(e.target.value)}
                 allowClear
