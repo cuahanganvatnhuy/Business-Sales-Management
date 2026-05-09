@@ -41,6 +41,11 @@ import {
 } from '@ant-design/icons';
 import { formatCurrency } from '../../utils/format';
 import dayjs from 'dayjs';
+import isSameOrAfter from 'dayjs/plugin/isSameOrAfter';
+import isSameOrBefore from 'dayjs/plugin/isSameOrBefore';
+
+dayjs.extend(isSameOrAfter);
+dayjs.extend(isSameOrBefore);
 import * as XLSX from 'xlsx';
 
 const { RangePicker } = DatePicker;
@@ -494,11 +499,28 @@ const ManageOrdersTMDT = () => {
 
     // Date range filter
     if (dateRange[0] && dateRange[1]) {
+      console.log('🔍 Date filter active:', {
+        dateRange: dateRange.map(d => d?.format('DD/MM/YYYY')),
+        totalOrdersBeforeFilter: filtered.length
+      });
+      
+      // Log sample orders to debug
+      console.log('📋 Sample orders before filter:');
+      filtered.slice(0, 3).forEach(order => {
+        console.log(`  - ${order.orderId}: ${order.orderDate} (${order.productName})`);
+      });
+      
       filtered = filtered.filter(order => {
         try {
           const orderDate = dayjs(order.orderDate || order.createdAt);
-          return orderDate.isAfter(dateRange[0].startOf('day')) && 
-                 orderDate.isBefore(dateRange[1].endOf('day'));
+          const isInRange = orderDate.isSameOrAfter(dateRange[0].startOf('day')) && 
+                           orderDate.isSameOrBefore(dateRange[1].endOf('day'));
+          
+          if (!isInRange && filtered.length <= 5) {
+            console.log(`❌ Filtered out: ${order.orderId} - ${order.orderDate}`);
+          }
+          
+          return isInRange;
         } catch (error) {
           console.error('Error processing order date:', order.orderDate, error);
           return false;
