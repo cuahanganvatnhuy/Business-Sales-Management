@@ -390,6 +390,16 @@ const MainLayout = () => {
           key: '/hr/roles',
           icon: <SettingOutlined />,
           label: 'Cài đặt phân quyền',
+        },
+        {
+          key: '/hr/salary',
+          icon: <DollarOutlined />,
+          label: 'Lương Nhân Viên',
+        },
+        {
+          key: '/hr/dashboard',
+          icon: <BarChartOutlined />,
+          label: 'Dashboard Nhân Sự',
         }
       ]
     });

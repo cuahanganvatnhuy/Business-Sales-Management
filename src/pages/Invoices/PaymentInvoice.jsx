@@ -65,6 +65,8 @@ const PaymentInvoice = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [editingPayment, setEditingPayment] = useState(null);
   const [searchText, setSearchText] = useState('');
+  const [selectedStore, setSelectedStore] = useState(null);
+  const [selectedPaymentStatus, setSelectedPaymentStatus] = useState(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState([]);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [viewingPayment, setViewingPayment] = useState(null);
@@ -132,17 +134,29 @@ const PaymentInvoice = () => {
 
   // Search filter
   useEffect(() => {
+    let filtered = payments;
+
+    // Filter by search text
     if (searchText) {
-      const filtered = payments.filter(payment =>
+      filtered = filtered.filter(payment =>
         payment.invoiceId?.toLowerCase().includes(searchText.toLowerCase()) ||
         payment.customerName?.toLowerCase().includes(searchText.toLowerCase()) ||
         payment.storeName?.toLowerCase().includes(searchText.toLowerCase())
       );
-      setFilteredPayments(filtered);
-    } else {
-      setFilteredPayments(payments);
     }
-  }, [searchText, payments]);
+
+    // Filter by store
+    if (selectedStore) {
+      filtered = filtered.filter(payment => payment.storeName === selectedStore);
+    }
+
+    // Filter by payment status
+    if (selectedPaymentStatus) {
+      filtered = filtered.filter(payment => payment.paymentStatus === selectedPaymentStatus);
+    }
+
+    setFilteredPayments(filtered);
+  }, [searchText, payments, selectedStore, selectedPaymentStatus]);
 
   // Open modal for edit/create
   const handleOpenModal = (payment = null) => {
@@ -882,14 +896,38 @@ const PaymentInvoice = () => {
                 </Popconfirm>
               )}
             </Space>
-            <Input
-              placeholder="Tìm kiếm theo mã hóa đơn, tên khách hàng, cửa hàng..."
-              prefix={<SearchOutlined />}
-              value={searchText}
-              onChange={(e) => setSearchText(e.target.value)}
-              style={{ minWidth: 280, maxWidth: 400 }}
-              allowClear
-            />
+            <Space>
+              <Select
+                placeholder="Lọc theo cửa hàng"
+                value={selectedStore}
+                onChange={setSelectedStore}
+                style={{ minWidth: 150, maxWidth: 200 }}
+                allowClear
+              >
+                {stores.map(store => (
+                  <Option key={store.id} value={store.name}>{store.name}</Option>
+                ))}
+              </Select>
+              <Select
+                placeholder="Lọc theo trạng thái"
+                value={selectedPaymentStatus}
+                onChange={setSelectedPaymentStatus}
+                style={{ minWidth: 150, maxWidth: 200 }}
+                allowClear
+              >
+                <Option value="paid">Đã thanh toán</Option>
+                <Option value="partial">Thanh toán 1 phần</Option>
+                <Option value="unpaid">Chưa thanh toán</Option>
+              </Select>
+              <Input
+                placeholder="Tìm kiếm theo mã hóa đơn, tên khách hàng..."
+                prefix={<SearchOutlined />}
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+                style={{ minWidth: 280, maxWidth: 400 }}
+                allowClear
+              />
+            </Space>
           </div>
 
           {/* Table */}

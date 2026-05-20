@@ -20,6 +20,8 @@ import { FinancialTransactions, ProfitOverview, EcommerceProfit, RetailProfit, W
 import ShopProfitManagement from './pages/Financial/ManualProfitManagement';
 import StaffManagement from './pages/HR/StaffManagement';
 import RoleManagement from './pages/HR/RoleManagement';
+import SalaryManagement from './pages/HR/SalaryManagement';
+import HRDashboard from './pages/HR/HRDashboard';
 import Profile from './pages/Profile';
 import ChangePassword from './pages/ChangePassword';
 import Settings from './pages/Settings';
@@ -129,6 +131,8 @@ function App() {
               <Route path="hr">
                 <Route path="staff" element={<StaffManagement />} />
                 <Route path="roles" element={<RoleManagement />} />
+                <Route path="salary" element={<SalaryManagement />} />
+                <Route path="dashboard" element={<HRDashboard />} />
               </Route>
 
               {/* User Profile & Settings */}
