@@ -239,6 +239,30 @@
   max-width: 100% !important;
 }
 
+@media (max-width: 576px) {
+  .ant-layout-content > * {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .ant-layout-content {
+    padding: 4px !important;
+    max-width: 100%  !important;
+  }
+
+  .ant-layout-content > * > * {
+    max-width: 100% !important;
+  }
+
+  * {
+    font-size: 12px !important;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-size: 14px !important;
+  }
+}
+
 /* Main layout wrapper */
 .ant-layout {
   background: var(--bg-light) !important;
@@ -303,9 +327,9 @@
   .logo h2 {
     font-size: 18px;
   }
-  
+
   .ant-layout-content {
-    margin: 16px 8px;
-    padding: 16px;
+    margin: 8px 4px;
+    padding: 8px;
   }
 }

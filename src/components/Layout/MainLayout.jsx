@@ -636,7 +636,7 @@ const MainLayout = () => {
                 justifyContent: 'center' 
               }}>
                 <img 
-                  src="logo.png" 
+                  src="/logo.png" 
                   alt="Logo" 
                   style={{ 
                     width: '180px', 
@@ -663,7 +663,7 @@ const MainLayout = () => {
                   userSelect: 'none'
                 }}>
                 <img 
-                  src="logo4.png" 
+                  src="/logo4.png" 
                   alt="Logo" 
                   style={{ 
                     width: '35px', 

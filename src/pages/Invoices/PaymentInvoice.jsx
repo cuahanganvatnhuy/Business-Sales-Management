@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { database } from '../../services/firebase.service';
 import { ref, onValue, push, set, update, remove } from 'firebase/database';
-import { 
-  Card, 
-  DatePicker, 
-  Button, 
-  Table, 
-  Typography, 
-  Space, 
-  Tag, 
+import {
+  Card,
+  DatePicker,
+  Button,
+  Table,
+  Typography,
+  Space,
+  Tag,
   Modal,
   Form,
   Input,
@@ -19,7 +19,9 @@ import {
   Popconfirm,
   Dropdown,
   Row,
-  Col
+  Col,
+  Statistic,
+  Progress
 } from 'antd';
 import {
   FileTextOutlined,
@@ -30,7 +32,11 @@ import {
   PrinterOutlined,
   SearchOutlined,
   MoreOutlined,
-  EyeOutlined
+  EyeOutlined,
+  CheckCircleOutlined,
+  ClockCircleOutlined,
+  ExclamationCircleOutlined,
+  WalletOutlined
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import 'dayjs/locale/vi';
@@ -811,149 +817,758 @@ const PaymentInvoice = () => {
     }
   ];
 
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   return (
-    <div style={{ padding: '24px', background: '#f5f5f5', minHeight: '100vh' }}>
-      <div
-        style={{
-          background: '#fff',
-          padding: '16px 24px',
-          borderRadius: 12,
-          marginBottom: 24,
-          boxShadow: '0 12px 30px rgba(5, 153, 0, 0.08)'
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+    <div style={{ padding: { xs: 0, md: '24px' }, background: '#f0f2f5', minHeight: '100vh' }}>
+      {!isMobile ? (
+        <>
+          {/* Desktop Header */}
           <div
             style={{
-              width: 48,
-              height: 48,
-              borderRadius: '50%',
-              background: '#e6f7e6',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
+              background: '#fff',
+              padding: { xs: '12px 16px', md: '16px 24px' },
+              borderRadius: 12,
+              marginBottom: { xs: 12, md: 24 },
+              boxShadow: '0 12px 30px rgba(5, 153, 0, 0.08)'
             }}
           >
-            <DollarOutlined style={{ fontSize: 20, color: '#0f9d58' }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: { xs: 12, md: 16 } }}>
+              <div
+                style={{
+                  width: { xs: 40, md: 48 },
+                  height: { xs: 40, md: 48 },
+                  borderRadius: '50%',
+                  background: '#e6f7e6',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                <DollarOutlined style={{ fontSize: { xs: 16, md: 20 }, color: '#0f9d58' }} />
+              </div>
+              <div>
+                <Title level={2} style={{ margin: 0, color: 'rgb(8 125 68)', fontWeight: 'bold', fontSize: { xs: 18, md: 23 } }}>
+                  Hóa Đơn Thanh Toán
+                </Title>
+                <Text type="secondary" style={{ fontSize: { xs: 12, md: 14 } }}>Quản lý hóa đơn thanh toán của khách hàng</Text>
+              </div>
+            </div>
           </div>
-          <div>
-            <Title level={2} style={{ margin: 0, color: 'rgb(8 125 68)', fontWeight: 'bold', fontSize: 23 }}>
-              Hóa Đơn Thanh Toán
-            </Title>
-            <Text type="secondary">Quản lý hóa đơn thanh toán của khách hàng</Text>
+        </>
+      ) : (
+        <>
+          {/* Mobile Header */}
+          <div
+            style={{
+              background: 'linear-gradient(135deg, #007A33 0%, #005A28 100%)',
+              padding: '24px 20px',
+              borderRadius: 0,
+              marginBottom: 0,
+              boxShadow: '0 4px 16px rgba(0, 122, 51, 0.2)'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+              <div
+                style={{
+                  width: 52,
+                  height: 52,
+                  borderRadius: '50%',
+                  background: 'rgba(255, 255, 255, 0.25)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backdropFilter: 'blur(10px)'
+                }}
+              >
+                <DollarOutlined style={{ fontSize: 26, color: 'white' }} />
+              </div>
+              <div>
+                <Title level={3} style={{ margin: 0, color: 'white', fontWeight: 'bold', fontSize: 22 }}>
+                  Hóa Đơn
+                </Title>
+                <Text style={{ color: 'rgba(255, 255, 255, 0.95)', fontSize: 14, fontWeight: 500 }}>
+                  {filteredPayments.length} hóa đơn
+                </Text>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
+
+          {/* Mobile Quick Stats */}
+          <div style={{ padding: '16px 16px 0' }}>
+            <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
+              <Col span={12}>
+                <div
+                  style={{
+                    background: 'linear-gradient(135deg, #5b8ff9 0%, #4876e8 100%)',
+                    padding: 16,
+                    borderRadius: 12,
+                    color: 'white',
+                    boxShadow: '0 4px 12px rgba(91, 143, 249, 0.25)'
+                  }}
+                >
+                  <div style={{ fontSize: 12, opacity: 0.95, marginBottom: 4 }}>Tổng HĐ</div>
+                  <div style={{ fontSize: 18, fontWeight: 'bold', lineHeight: 1.2 }}>
+                    {filteredPayments.length}
+                  </div>
+                </div>
+              </Col>
+              <Col span={12}>
+                <div
+                  style={{
+                    background: 'linear-gradient(135deg, #ff7d45 0%, #e66a2e 100%)',
+                    padding: 16,
+                    borderRadius: 12,
+                    color: 'white',
+                    boxShadow: '0 4px 12px rgba(255, 125, 69, 0.25)'
+                  }}
+                >
+                  <div style={{ fontSize: 12, opacity: 0.95, marginBottom: 4 }}>Tổng Tiền</div>
+                  <div style={{ fontSize: 18, fontWeight: 'bold', lineHeight: 1.2 }}>
+                    {new Intl.NumberFormat('vi-VN').format(filteredPayments.reduce((sum, p) => sum + (p.totalAmount || 0), 0))}
+                  </div>
+                </div>
+              </Col>
+              <Col span={12}>
+                <div
+                  style={{
+                    background: 'linear-gradient(135deg, #5ad8a6 0%, #4bc49a 100%)',
+                    padding: 16,
+                    borderRadius: 12,
+                    color: 'white',
+                    boxShadow: '0 4px 12px rgba(90, 216, 166, 0.25)'
+                  }}
+                >
+                  <div style={{ fontSize: 12, opacity: 0.95, marginBottom: 4 }}>Đã Thanh Toán</div>
+                  <div style={{ fontSize: 18, fontWeight: 'bold', lineHeight: 1.2 }}>
+                    {new Intl.NumberFormat('vi-VN').format(filteredPayments.reduce((sum, p) => sum + (p.paidAmount || 0), 0))}
+                  </div>
+                </div>
+              </Col>
+              <Col span={12}>
+                <div
+                  style={{
+                    background: 'linear-gradient(135deg, #f6bd16 0%, #e5a810 100%)',
+                    padding: 16,
+                    borderRadius: 12,
+                    color: 'white',
+                    boxShadow: '0 4px 12px rgba(246, 189, 22, 0.25)'
+                  }}
+                >
+                  <div style={{ fontSize: 12, opacity: 0.95, marginBottom: 4 }}>Còn Lại</div>
+                  <div style={{ fontSize: 18, fontWeight: 'bold', lineHeight: 1.2 }}>
+                    {new Intl.NumberFormat('vi-VN').format(filteredPayments.reduce((sum, p) => sum + (p.remainingAmount || 0), 0))}
+                  </div>
+                </div>
+              </Col>
+            </Row>
+          </div>
+        </>
+      )}
+
+      {/* Dashboard Statistics - Hidden on mobile */}
+      {!isMobile && (
+        <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+        <Col xs={12} sm={12} md={6}>
+          <Card
+            style={{
+              borderRadius: 12,
+              background: '#5b8ff9',
+              color: 'white',
+              boxShadow: '0 4px 12px rgba(91, 143, 249, 0.2)'
+            }}
+            bodyStyle={{ padding: { xs: 12, md: 20 } }}
+          >
+            <Statistic
+              title={<span style={{ color: 'rgba(255,255,255,0.9)', fontSize: { xs: 12, md: 14 } }}>Tổng HĐ</span>}
+              value={filteredPayments.length}
+              prefix={<FileTextOutlined style={{ color: 'white', fontSize: { xs: 16, md: 24 } }} />}
+              valueStyle={{ color: 'white', fontSize: { xs: 20, md: 28 }, fontWeight: 'bold' }}
+            />
+          </Card>
+        </Col>
+        <Col xs={12} sm={12} md={6}>
+          <Card
+            style={{
+              borderRadius: 12,
+              background: '#ff7d45',
+              color: 'white',
+              boxShadow: '0 4px 12px rgba(255, 125, 69, 0.2)'
+            }}
+            bodyStyle={{ padding: { xs: 12, md: 20 } }}
+          >
+            <Statistic
+              title={<span style={{ color: 'rgba(255,255,255,0.9)', fontSize: { xs: 12, md: 14 } }}>Tổng Tiền</span>}
+              value={filteredPayments.reduce((sum, p) => sum + (p.totalAmount || 0), 0)}
+              prefix={<DollarOutlined style={{ color: 'white', fontSize: { xs: 16, md: 24 } }} />}
+              precision={0}
+              valueStyle={{ color: 'white', fontSize: { xs: 20, md: 28 }, fontWeight: 'bold' }}
+              formatter={(value) => new Intl.NumberFormat('vi-VN').format(value)}
+            />
+          </Card>
+        </Col>
+        <Col xs={12} sm={12} md={6}>
+          <Card
+            style={{
+              borderRadius: 12,
+              background: '#5ad8a6',
+              color: 'white',
+              boxShadow: '0 4px 12px rgba(90, 216, 166, 0.2)'
+            }}
+            bodyStyle={{ padding: { xs: 12, md: 20 } }}
+          >
+            <Statistic
+              title={<span style={{ color: 'rgba(255,255,255,0.9)', fontSize: { xs: 12, md: 14 } }}>Đã TT</span>}
+              value={filteredPayments.reduce((sum, p) => sum + (p.paidAmount || 0), 0)}
+              prefix={<CheckCircleOutlined style={{ color: 'white', fontSize: { xs: 16, md: 24 } }} />}
+              precision={0}
+              valueStyle={{ color: 'white', fontSize: { xs: 20, md: 28 }, fontWeight: 'bold' }}
+              formatter={(value) => new Intl.NumberFormat('vi-VN').format(value)}
+            />
+          </Card>
+        </Col>
+        <Col xs={12} sm={12} md={6}>
+          <Card
+            style={{
+              borderRadius: 12,
+              background: '#f6bd16',
+              color: 'white',
+              boxShadow: '0 4px 12px rgba(246, 189, 22, 0.2)'
+            }}
+            bodyStyle={{ padding: { xs: 12, md: 20 } }}
+          >
+            <Statistic
+              title={<span style={{ color: 'rgba(255,255,255,0.9)', fontSize: { xs: 12, md: 14 } }}>Còn Lại</span>}
+              value={filteredPayments.reduce((sum, p) => sum + (p.remainingAmount || 0), 0)}
+              prefix={<WalletOutlined style={{ color: 'white', fontSize: { xs: 16, md: 24 } }} />}
+              precision={0}
+              valueStyle={{ color: 'white', fontSize: { xs: 20, md: 28 }, fontWeight: 'bold' }}
+              formatter={(value) => new Intl.NumberFormat('vi-VN').format(value)}
+            />
+          </Card>
+        </Col>
+      </Row>
+      )}
+
+      {/* Status Breakdown */}
+      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+        <Col xs={24} sm={8} md={8}>
+          <Card
+            style={{
+              borderRadius: 12,
+              background: '#f6ffed',
+              border: '2px solid #52c41a',
+              boxShadow: '0 4px 12px rgba(82, 196, 26, 0.15)'
+            }}
+            bodyStyle={{ padding: 16 }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <div style={{ color: '#52c41a', fontSize: 13, fontWeight: 500, marginBottom: 4 }}>
+                  Đã Thanh Toán
+                </div>
+                <div style={{ fontSize: 24, fontWeight: 'bold', color: '#262626' }}>
+                  {filteredPayments.filter(p => p.paymentStatus === 'paid').length}
+                </div>
+              </div>
+              <CheckCircleOutlined style={{ fontSize: 32, color: '#52c41a' }} />
+            </div>
+          </Card>
+        </Col>
+        <Col xs={24} sm={8}>
+          <Card
+            style={{
+              borderRadius: 12,
+              background: '#fffbe6',
+              border: '2px solid #faad14',
+              boxShadow: '0 4px 12px rgba(250, 173, 20, 0.15)'
+            }}
+            bodyStyle={{ padding: 16 }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <div style={{ color: '#faad14', fontSize: 13, fontWeight: 500, marginBottom: 4 }}>
+                  Thanh Toán 1 Phần
+                </div>
+                <div style={{ fontSize: 24, fontWeight: 'bold', color: '#262626' }}>
+                  {filteredPayments.filter(p => p.paymentStatus === 'partial').length}
+                </div>
+              </div>
+              <ClockCircleOutlined style={{ fontSize: 32, color: '#faad14' }} />
+            </div>
+          </Card>
+        </Col>
+        <Col xs={24} sm={8}>
+          <Card
+            style={{
+              borderRadius: 12,
+              background: '#fff1f0',
+              border: '2px solid #ff4d4f',
+              boxShadow: '0 4px 12px rgba(255, 77, 79, 0.15)'
+            }}
+            bodyStyle={{ padding: 16 }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <div style={{ color: '#ff4d4f', fontSize: 13, fontWeight: 500, marginBottom: 4 }}>
+                  Chưa Thanh Toán
+                </div>
+                <div style={{ fontSize: 24, fontWeight: 'bold', color: '#262626' }}>
+                  {filteredPayments.filter(p => p.paymentStatus === 'unpaid').length}
+                </div>
+              </div>
+              <ExclamationCircleOutlined style={{ fontSize: 32, color: '#ff4d4f' }} />
+            </div>
+          </Card>
+        </Col>
+      </Row>
+
+      {/* Payment Status Distribution */}
+      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+        <Col xs={24} md={12}>
+          <Card
+            title={<span style={{ fontSize: 16, fontWeight: 'bold', color: '#262626' }}>📊 Tỷ Trạng Thái Thanh Toán</span>}
+            style={{ borderRadius: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}
+            bodyStyle={{ padding: 20 }}
+          >
+            <Space direction="vertical" style={{ width: '100%' }} size="large">
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <span style={{ color: '#52c41a', fontWeight: 500 }}>Đã Thanh Toán</span>
+                  <span style={{ fontWeight: 'bold' }}>
+                    {filteredPayments.length > 0 
+                      ? Math.round((filteredPayments.filter(p => p.paymentStatus === 'paid').length / filteredPayments.length) * 100) 
+                      : 0}%
+                  </span>
+                </div>
+                <Progress 
+                  percent={filteredPayments.length > 0 
+                    ? Math.round((filteredPayments.filter(p => p.paymentStatus === 'paid').length / filteredPayments.length) * 100) 
+                    : 0} 
+                  strokeColor="#52c41a"
+                  showInfo={false}
+                />
+              </div>
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <span style={{ color: '#faad14', fontWeight: 500 }}>Thanh Toán 1 Phần</span>
+                  <span style={{ fontWeight: 'bold' }}>
+                    {filteredPayments.length > 0 
+                      ? Math.round((filteredPayments.filter(p => p.paymentStatus === 'partial').length / filteredPayments.length) * 100) 
+                      : 0}%
+                  </span>
+                </div>
+                <Progress 
+                  percent={filteredPayments.length > 0 
+                    ? Math.round((filteredPayments.filter(p => p.paymentStatus === 'partial').length / filteredPayments.length) * 100) 
+                    : 0} 
+                  strokeColor="#faad14"
+                  showInfo={false}
+                />
+              </div>
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <span style={{ color: '#ff4d4f', fontWeight: 500 }}>Chưa Thanh Toán</span>
+                  <span style={{ fontWeight: 'bold' }}>
+                    {filteredPayments.length > 0 
+                      ? Math.round((filteredPayments.filter(p => p.paymentStatus === 'unpaid').length / filteredPayments.length) * 100) 
+                      : 0}%
+                  </span>
+                </div>
+                <Progress 
+                  percent={filteredPayments.length > 0 
+                    ? Math.round((filteredPayments.filter(p => p.paymentStatus === 'unpaid').length / filteredPayments.length) * 100) 
+                    : 0} 
+                  strokeColor="#ff4d4f"
+                  showInfo={false}
+                />
+              </div>
+            </Space>
+          </Card>
+        </Col>
+        <Col xs={24} md={12}>
+          <Card
+            title={<span style={{ fontSize: 16, fontWeight: 'bold', color: '#262626' }}>🏪 Thống Kê Theo Cửa Hàng</span>}
+            style={{ borderRadius: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}
+            bodyStyle={{ padding: 16, maxHeight: 450, overflowY: 'auto' }}
+          >
+            <Table
+              dataSource={stores.map(store => {
+                const storePayments = filteredPayments.filter(p => p.storeName === store.name);
+                if (storePayments.length === 0) return null;
+
+                const totalInvoices = storePayments.length;
+                const totalAmount = storePayments.reduce((sum, p) => sum + (p.totalAmount || 0), 0);
+                const paidAmount = storePayments.reduce((sum, p) => sum + (p.paidAmount || 0), 0);
+                const remainingAmount = storePayments.reduce((sum, p) => sum + (p.remainingAmount || 0), 0);
+
+                return {
+                  key: store.id,
+                  store: store.name,
+                  invoices: totalInvoices,
+                  total: totalAmount,
+                  paid: paidAmount,
+                  remaining: remainingAmount
+                };
+              }).filter(item => item !== null)}
+              columns={[
+                {
+                  title: 'Cửa Hàng',
+                  dataIndex: 'store',
+                  key: 'store',
+                  ellipsis: true,
+                  render: (text) => <span style={{ fontWeight: 500, color: '#262626' }}>{text}</span>
+                },
+                {
+                  title: 'Số HĐ',
+                  dataIndex: 'invoices',
+                  key: 'invoices',
+                  align: 'center',
+                  render: (value) => <Tag color="blue" style={{ fontWeight: 'bold' }}>{value}</Tag>
+                },
+                {
+                  title: 'Tổng Tiền',
+                  dataIndex: 'total',
+                  key: 'total',
+                  align: 'right',
+                  render: (value) => <span style={{ fontWeight: 'bold', color: '#52c41a' }}>{new Intl.NumberFormat('vi-VN').format(value)}</span>
+                },
+                {
+                  title: 'Đã TT',
+                  dataIndex: 'paid',
+                  key: 'paid',
+                  align: 'right',
+                  render: (value) => <span style={{ fontWeight: 'bold', color: '#1890ff' }}>{new Intl.NumberFormat('vi-VN').format(value)}</span>
+                },
+                {
+                  title: 'Còn Lại',
+                  dataIndex: 'remaining',
+                  key: 'remaining',
+                  align: 'right',
+                  render: (value) => <span style={{ fontWeight: 'bold', color: value > 0 ? '#ff4d4f' : '#52c41a' }}>{new Intl.NumberFormat('vi-VN').format(value)}</span>
+                }
+              ]}
+              pagination={false}
+              size="small"
+              scroll={{ y: 350, x: 800 }}
+            />
+          </Card>
+        </Col>
+      </Row>
 
       <Card
-        style={{ borderRadius: 12, boxShadow: '0 10px 30px rgba(15, 157, 88, 0.08)' }}
-        bodyStyle={{ padding: 24 }}
+        style={{ 
+          borderRadius: { xs: 0, md: 12 }, 
+          boxShadow: 'none',
+          background: 'transparent'
+        }}
+        bodyStyle={{ padding: { xs: '16px', md: 24 } }}
       >
-        <Space direction="vertical" size="large" style={{ width: '100%' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
-            <Space>
+        {!isMobile ? (
+          <Space direction="vertical" size={24} style={{ width: '100%' }}>
+            <Row gutter={[8, 8]} style={{ marginBottom: 0 }}>
+              <Col xs={24} sm={24} md={8}>
+                <Space wrap size="small">
+                  <Button
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    onClick={() => handleOpenModal()}
+                    size={{ xs: 'small', sm: 'middle', md: 'large' }}
+                  >
+                    {window.innerWidth < 576 ? 'Tạo' : 'Tạo Hóa Đơn Mới'}
+                  </Button>
+
+                  {selectedRowKeys.length > 0 && (
+                    <Popconfirm
+                      title={`Bạn có chắc muốn xóa ${selectedRowKeys.length} hóa đơn đã chọn?`}
+                      onConfirm={handleDeleteSelected}
+                      okText="Có"
+                      cancelText="Không"
+                    >
+                      <Button
+                        danger
+                        icon={<DeleteOutlined />}
+                        size={{ xs: 'small', sm: 'middle', md: 'large' }}
+                      >
+                        {window.innerWidth < 576 ? `Xóa (${selectedRowKeys.length})` : `Xóa Đã Chọn (${selectedRowKeys.length})`}
+                      </Button>
+                    </Popconfirm>
+                  )}
+
+                  {filteredPayments.length > 0 && (
+                    <Popconfirm
+                      title={`Bạn có chắc muốn xóa tất cả ${filteredPayments.length} hóa đơn?`}
+                      onConfirm={handleDeleteAll}
+                      okText="Có"
+                      cancelText="Không"
+                    >
+                      <Button
+                        danger
+                        icon={<DeleteOutlined />}
+                        size={{ xs: 'small', sm: 'middle', md: 'large' }}
+                        type="dashed"
+                      >
+                        {window.innerWidth < 576 ? 'Xóa Tất Cả' : 'Xóa Tất Cả'}
+                      </Button>
+                    </Popconfirm>
+                  )}
+                </Space>
+              </Col>
+              <Col xs={24} sm={24} md={16}>
+                <Space wrap size="small" style={{ width: '100%', justifyContent: 'flex-end' }}>
+                  <Select
+                    placeholder="Cửa hàng"
+                    value={selectedStore}
+                    onChange={setSelectedStore}
+                    style={{ width: 200 }}
+                    allowClear
+                  >
+                    {stores.map(store => (
+                      <Option key={store.id} value={store.name}>{store.name}</Option>
+                    ))}
+                  </Select>
+                  <Select
+                    placeholder="Trạng thái"
+                    value={selectedPaymentStatus}
+                    onChange={setSelectedPaymentStatus}
+                    style={{ width: 150 }}
+                    allowClear
+                  >
+                    <Option value="paid">Đã TT</Option>
+                    <Option value="partial">1 Phần</Option>
+                    <Option value="unpaid">Chưa TT</Option>
+                  </Select>
+                  <Input
+                    placeholder="Tìm kiếm..."
+                    prefix={<SearchOutlined />}
+                    value={searchText}
+                    onChange={(e) => setSearchText(e.target.value)}
+                    style={{ width: 200 }}
+                    allowClear
+                  />
+                </Space>
+              </Col>
+            </Row>
+
+            {/* Table */}
+            <Table
+              columns={columns}
+              dataSource={filteredPayments}
+              rowKey="id"
+              loading={loading}
+              rowSelection={{
+                selectedRowKeys,
+                onChange: setSelectedRowKeys,
+                selections: [
+                  Table.SELECTION_ALL,
+                  Table.SELECTION_INVERT,
+                  Table.SELECTION_NONE,
+                ],
+              }}
+              pagination={{
+                defaultPageSize: 10,
+                showSizeChanger: true,
+                showTotal: (total, range) =>
+                  `${range[0]}-${range[1]} của ${total} hóa đơn${selectedRowKeys.length > 0 ? ` (Đã chọn: ${selectedRowKeys.length})` : ''}`,
+                pageSizeOptions: ['10', '20', '50', '100'],
+                simple: window.innerWidth < 576,
+              }}
+              scroll={{ x: { xs: 800, md: 1200 } }}
+              size={{ xs: 'small', md: 'middle' }}
+            />
+          </Space>
+        ) : (
+          <>
+            {/* Mobile Filters */}
+            <div style={{ padding: '0 16px 16px' }}>
+              <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                <Input
+                  placeholder="Tìm kiếm hóa đơn..."
+                  prefix={<SearchOutlined />}
+                  value={searchText}
+                  onChange={(e) => setSearchText(e.target.value)}
+                  allowClear
+                  size="large"
+                  style={{
+                    borderRadius: 12,
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
+                  }}
+                />
+                <Row gutter={[12, 12]}>
+                  <Col span={12}>
+                    <Select
+                      placeholder="Cửa hàng"
+                      value={selectedStore}
+                      onChange={setSelectedStore}
+                      style={{ width: '100%' }}
+                      size="large"
+                      allowClear
+                    >
+                      {stores.map(store => (
+                        <Option key={store.id} value={store.name}>{store.name}</Option>
+                      ))}
+                    </Select>
+                  </Col>
+                  <Col span={12}>
+                    <Select
+                      placeholder="Trạng thái"
+                      value={selectedPaymentStatus}
+                      onChange={setSelectedPaymentStatus}
+                      style={{ width: '100%' }}
+                      size="large"
+                      allowClear
+                    >
+                      <Option value="paid">Đã TT</Option>
+                      <Option value="partial">1 Phần</Option>
+                      <Option value="unpaid">Chưa TT</Option>
+                    </Select>
+                  </Col>
+                </Row>
+              </Space>
+            </div>
+
+            {/* Mobile Action Button */}
+            <div style={{ padding: '0 16px 16px' }}>
               <Button
                 type="primary"
                 icon={<PlusOutlined />}
                 onClick={() => handleOpenModal()}
+                block
                 size="large"
+                style={{
+                  height: 48,
+                  borderRadius: 12,
+                  fontSize: 16,
+                  fontWeight: 600,
+                  boxShadow: '0 4px 12px rgba(24, 144, 255, 0.3)'
+                }}
               >
                 Tạo Hóa Đơn Mới
               </Button>
-              
-              {selectedRowKeys.length > 0 && (
-                <Popconfirm
-                  title={`Bạn có chắc muốn xóa ${selectedRowKeys.length} hóa đơn đã chọn?`}
-                  onConfirm={handleDeleteSelected}
-                  okText="Có"
-                  cancelText="Không"
-                >
-                  <Button
-                    danger
-                    icon={<DeleteOutlined />}
-                    size="large"
-                  >
-                    Xóa Đã Chọn ({selectedRowKeys.length})
-                  </Button>
-                </Popconfirm>
-              )}
-              
-              {filteredPayments.length > 0 && (
-                <Popconfirm
-                  title={`Bạn có chắc muốn xóa tất cả ${filteredPayments.length} hóa đơn?`}
-                  onConfirm={handleDeleteAll}
-                  okText="Có"
-                  cancelText="Không"
-                >
-                  <Button
-                    danger
-                    icon={<DeleteOutlined />}
-                    size="large"
-                    type="dashed"
-                  >
-                    Xóa Tất Cả
-                  </Button>
-                </Popconfirm>
-              )}
-            </Space>
-            <Space>
-              <Select
-                placeholder="Lọc theo cửa hàng"
-                value={selectedStore}
-                onChange={setSelectedStore}
-                style={{ minWidth: 150, maxWidth: 200 }}
-                allowClear
-              >
-                {stores.map(store => (
-                  <Option key={store.id} value={store.name}>{store.name}</Option>
-                ))}
-              </Select>
-              <Select
-                placeholder="Lọc theo trạng thái"
-                value={selectedPaymentStatus}
-                onChange={setSelectedPaymentStatus}
-                style={{ minWidth: 150, maxWidth: 200 }}
-                allowClear
-              >
-                <Option value="paid">Đã thanh toán</Option>
-                <Option value="partial">Thanh toán 1 phần</Option>
-                <Option value="unpaid">Chưa thanh toán</Option>
-              </Select>
-              <Input
-                placeholder="Tìm kiếm theo mã hóa đơn, tên khách hàng..."
-                prefix={<SearchOutlined />}
-                value={searchText}
-                onChange={(e) => setSearchText(e.target.value)}
-                style={{ minWidth: 280, maxWidth: 400 }}
-                allowClear
-              />
-            </Space>
-          </div>
+            </div>
 
-          {/* Table */}
-          <Table
-            columns={columns}
-            dataSource={filteredPayments}
-            rowKey="id"
-            loading={loading}
-            rowSelection={{
-              selectedRowKeys,
-              onChange: setSelectedRowKeys,
-              selections: [
-                Table.SELECTION_ALL,
-                Table.SELECTION_INVERT,
-                Table.SELECTION_NONE,
-              ],
-            }}
-            pagination={{
-              defaultPageSize: 10,
-              showSizeChanger: true,
-              showTotal: (total, range) => 
-                `${range[0]}-${range[1]} của ${total} hóa đơn${selectedRowKeys.length > 0 ? ` (Đã chọn: ${selectedRowKeys.length})` : ''}`,
-            }}
-            scroll={{ x: 1400 }}
-          />
-        </Space>
+            {/* Mobile Card List */}
+            <div style={{ padding: '0 16px 16px' }}>
+              <Space direction="vertical" size={10} style={{ width: '100%' }}>
+                {filteredPayments.map(payment => (
+                  <div
+                    key={payment.id}
+                    style={{
+                      background: 'white',
+                      borderRadius: 10,
+                      padding: 12,
+                      boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+                      border: '1px solid #f0f0f0'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <div
+                        style={{
+                          width: 44,
+                          height: 44,
+                          borderRadius: 10,
+                          background: payment.paymentStatus === 'paid' ? '#f6ffed' : payment.paymentStatus === 'partial' ? '#fffbe6' : '#fff1f0',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0
+                        }}
+                      >
+                        {payment.paymentStatus === 'paid' ? (
+                          <CheckCircleOutlined style={{ fontSize: 22, color: '#52c41a' }} />
+                        ) : payment.paymentStatus === 'partial' ? (
+                          <ClockCircleOutlined style={{ fontSize: 22, color: '#faad14' }} />
+                        ) : (
+                          <ExclamationCircleOutlined style={{ fontSize: 22, color: '#ff4d4f' }} />
+                        )}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                          <span style={{ fontWeight: 600, fontSize: 14, color: '#262626', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{payment.invoiceId}</span>
+                          <span style={{ fontWeight: 'bold', fontSize: 15, color: '#52c41a', flexShrink: 0, marginLeft: 8 }}>
+                            {new Intl.NumberFormat('vi-VN').format(payment.totalAmount)}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{payment.customerName}</div>
+                        <div style={{ fontSize: 11, color: '#bfbfbf', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{payment.storeName} • {payment.paymentDate ? dayjs(payment.paymentDate).format('DD/MM/YYYY') : 'N/A'}</div>
+                      </div>
+                      <Dropdown
+                        menu={{
+                          items: [
+                            {
+                              key: 'view',
+                              icon: <EyeOutlined />,
+                              label: 'Xem chi tiết',
+                              onClick: () => handleViewDetail(payment)
+                            },
+                            {
+                              key: 'edit',
+                              icon: <EditOutlined />,
+                              label: 'Chỉnh sửa',
+                              onClick: () => handleOpenModal(payment)
+                            },
+                            {
+                              type: 'divider'
+                            },
+                            {
+                              key: 'delete',
+                              icon: <DeleteOutlined />,
+                              label: (
+                                <Popconfirm
+                                  title="Xóa hóa đơn này?"
+                                  onConfirm={() => handleDeletePayment(payment.id)}
+                                  okText="Có"
+                                  cancelText="Không"
+                                >
+                                  <span style={{ color: '#ff4d4f' }}>Xóa</span>
+                                </Popconfirm>
+                              ),
+                              danger: true
+                            }
+                          ]
+                        }}
+                        trigger={['click']}
+                        placement="bottomRight"
+                      >
+                        <Button
+                          type="text"
+                          icon={<MoreOutlined />}
+                          size="small"
+                          style={{
+                            color: '#8c8c8c',
+                            padding: '4px'
+                          }}
+                        />
+                      </Dropdown>
+                    </div>
+                  </div>
+                ))}
+                {filteredPayments.length === 0 && (
+                  <div style={{
+                    textAlign: 'center',
+                    padding: 48,
+                    color: '#bfbfbf',
+                    background: 'white',
+                    borderRadius: 12,
+                    border: '2px dashed #d9d9d9'
+                  }}>
+                    <FileTextOutlined style={{ fontSize: 48, marginBottom: 16 }} />
+                    <div style={{ fontSize: 14 }}>Không có hóa đơn</div>
+                  </div>
+                )}
+              </Space>
+            </div>
+          </>
+        )}
       </Card>
 
       {/* Modal Form */}
@@ -970,7 +1585,8 @@ const PaymentInvoice = () => {
           setModalVisible(false);
           form.resetFields();
         }}
-        width={700}
+        width={{ xs: '100%', sm: 600, md: 700 }}
+        style={{ top: 20 }}
         okText={editingPayment ? 'Cập Nhật' : 'Tạo Mới'}
         cancelText="Hủy"
       >
@@ -1119,9 +1735,9 @@ const PaymentInvoice = () => {
             Đóng
           </Button>,
           viewingPayment && (
-            <Button 
-              key="print" 
-              type="primary" 
+            <Button
+              key="print"
+              type="primary"
               icon={<PrinterOutlined />}
               onClick={() => {
                 printPaymentInvoice(viewingPayment);
@@ -1132,7 +1748,8 @@ const PaymentInvoice = () => {
             </Button>
           )
         ]}
-        width="70%"
+        width={{ xs: '100%', sm: '80%', md: '70%', lg: '60%' }}
+        style={{ top: 20 }}
       >
         {viewingPayment ? (
           <div>

@@ -29,19 +29,6 @@ import MainLayout from './components/Layout/MainLayout';
 import './App.css';
 
 function App() {
-  useEffect(() => {
-    const applyZoom = () => {
-      const width = window.innerWidth;
-      if (width <= 1600) {
-        document.body.classList.add('app-zoom-80');
-      } else {
-        document.body.classList.remove('app-zoom-80');
-      }
-    };
-    applyZoom();
-    window.addEventListener('resize', applyZoom);
-    return () => window.removeEventListener('resize', applyZoom);
-  }, []);
   return (
     <ConfigProvider locale={viVN}>
       <AuthProvider>
