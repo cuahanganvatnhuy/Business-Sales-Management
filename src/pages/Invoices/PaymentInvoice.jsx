@@ -121,8 +121,8 @@ const PaymentInvoice = () => {
         const paymentsArray = Object.keys(data)
           .map(key => ({ id: key, ...data[key] }))
           .sort((a, b) => {
-            const dateA = dayjs(a.paymentDate, 'DD/MM/YYYY');
-            const dateB = dayjs(b.paymentDate, 'DD/MM/YYYY');
+            const dateA = dayjs(a.createdAt);
+            const dateB = dayjs(b.createdAt);
             return dateB.valueOf() - dateA.valueOf();
           });
         
