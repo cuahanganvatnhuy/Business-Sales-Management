@@ -916,7 +916,7 @@ const PaymentInvoice = () => {
                     boxShadow: '0 4px 12px rgba(91, 143, 249, 0.25)'
                   }}
                 >
-                  <div style={{ fontSize: 12, opacity: 0.95, marginBottom: 4 }}>Tổng HĐ</div>
+                  <div style={{ fontSize: 12, opacity: 0.95, marginBottom: 4 }}>Tổng Hóa Đơn</div>
                   <div style={{ fontSize: 18, fontWeight: 'bold', lineHeight: 1.2 }}>
                     {filteredPayments.length}
                   </div>
@@ -989,7 +989,7 @@ const PaymentInvoice = () => {
             bodyStyle={{ padding: { xs: 12, md: 20 } }}
           >
             <Statistic
-              title={<span style={{ color: 'rgba(255,255,255,0.9)', fontSize: { xs: 12, md: 14 } }}>Tổng HĐ</span>}
+              title={<span style={{ color: 'rgba(255,255,255,0.9)', fontSize: { xs: 12, md: 14 } }}>Tổng Hóa Đơn</span>}
               value={filteredPayments.length}
               prefix={<FileTextOutlined style={{ color: 'white', fontSize: { xs: 16, md: 24 } }} />}
               valueStyle={{ color: 'white', fontSize: { xs: 20, md: 28 }, fontWeight: 'bold' }}
@@ -1027,7 +1027,7 @@ const PaymentInvoice = () => {
             bodyStyle={{ padding: { xs: 12, md: 20 } }}
           >
             <Statistic
-              title={<span style={{ color: 'rgba(255,255,255,0.9)', fontSize: { xs: 12, md: 14 } }}>Đã TT</span>}
+              title={<span style={{ color: 'rgba(255,255,255,0.9)', fontSize: { xs: 12, md: 14 } }}>Đã Thanh Toán</span>}
               value={filteredPayments.reduce((sum, p) => sum + (p.paidAmount || 0), 0)}
               prefix={<CheckCircleOutlined style={{ color: 'white', fontSize: { xs: 16, md: 24 } }} />}
               precision={0}
@@ -1136,7 +1136,7 @@ const PaymentInvoice = () => {
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
         <Col xs={24} md={12}>
           <Card
-            title={<span style={{ fontSize: 16, fontWeight: 'bold', color: '#262626' }}>📊 Tỷ Trạng Thái Thanh Toán</span>}
+            title={<span style={{ fontSize: 16, color: '#262626' }}>📊 Tỷ Lệ  Thanh Toán</span>}
             style={{ borderRadius: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}
             bodyStyle={{ padding: 20 }}
           >
@@ -1197,7 +1197,7 @@ const PaymentInvoice = () => {
         </Col>
         <Col xs={24} md={12}>
           <Card
-            title={<span style={{ fontSize: 16, fontWeight: 'bold', color: '#262626' }}>🏪 Thống Kê Theo Cửa Hàng</span>}
+            title={<span style={{ fontSize: 16,  color: '#262626' }}>🏪 Thống Kê Theo Cửa Hàng</span>}
             style={{ borderRadius: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}
             bodyStyle={{ padding: 16, maxHeight: 450, overflowY: 'auto' }}
           >
@@ -1243,7 +1243,7 @@ const PaymentInvoice = () => {
                   render: (value) => <span style={{ fontWeight: 'bold', color: '#52c41a' }}>{new Intl.NumberFormat('vi-VN').format(value)}</span>
                 },
                 {
-                  title: 'Đã TT',
+                  title: 'Đã Thanh Toán',
                   dataIndex: 'paid',
                   key: 'paid',
                   align: 'right',
@@ -1343,9 +1343,9 @@ const PaymentInvoice = () => {
                     style={{ width: 150 }}
                     allowClear
                   >
-                    <Option value="paid">Đã TT</Option>
-                    <Option value="partial">1 Phần</Option>
-                    <Option value="unpaid">Chưa TT</Option>
+                    <Option value="paid">Đã Thanh toán</Option>
+                    <Option value="partial">Thanh toán 1 Phần</Option>
+                    <Option value="unpaid">Chưa Thanh Toán</Option>
                   </Select>
                   <Input
                     placeholder="Tìm kiếm..."
