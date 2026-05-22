@@ -1197,7 +1197,7 @@ const PaymentInvoice = () => {
         </Col>
         <Col xs={24} md={12}>
           <Card
-            title={<span style={{ fontSize: 16,  color: '#262626' }}>🏪 Thống Kê Theo Cửa Hàng</span>}
+            title={<span style={{ fontSize: 16,color: '#262626' }}>🏪 Thống Kê Theo Cửa Hàng</span>}
             style={{ borderRadius: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}
             bodyStyle={{ padding: 16, maxHeight: 450, overflowY: 'auto' }}
           >
