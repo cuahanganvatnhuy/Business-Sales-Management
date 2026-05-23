@@ -14,7 +14,7 @@
 
 /* ===== SIDEBAR STYLING ===== */
 .ant-layout-sider {
-  background: linear-gradient(135deg, var(--primary-green) 0%, var(--dark-green) 100%) !important;
+  background: rgb(46, 156, 114) !important;
   box-shadow: 2px 0 10px var(--shadow);
   width: 250px !important;
   min-width: 250px !important;
@@ -80,21 +80,26 @@
 .ant-menu-dark .ant-menu-submenu-title {
   margin: 0 !important;
   padding: 12px 20px !important;
-  height: auto !important;
-  line-height: 1.5 !important;
-  color: rgba(255, 255, 255, 0.8) !important;
+  height: 48px !important;
+  line-height: 48px !important;
+  color: white !important;
   border-radius: 0 !important;
   transition: all 0.3s ease;
   display: flex !important;
   align-items: center !important;
   text-align: left !important;
-  font-size: 13px !important;
+  font-size: 14px !important;
+  font-weight: 500;
 }
 
 .ant-menu-dark .ant-menu-item .ant-menu-title-content,
 .ant-menu-dark .ant-menu-submenu-title .ant-menu-title-content {
   text-align: left !important;
   flex: 1 !important;
+  display: flex !important;
+  align-items: center !important;
+  line-height: 48px !important;
+  overflow: visible !important;
 }
 
 .ant-menu-dark .ant-menu-item:hover,
@@ -157,6 +162,49 @@
 .ant-menu-submenu-title .anticon {
   font-size: 16px !important;
   margin-right: 12px !important;
+  flex-shrink: 0;
+  display: inline-flex !important;
+  align-items: center !important;
+  vertical-align: middle !important;
+  width: 16px !important;
+  height: 16px !important;
+  justify-content: center !important;
+}
+
+/* FontAwesome Icons in Menu */
+.ant-menu-item i.fas,
+.ant-menu-item i.far,
+.ant-menu-submenu-title i.fas,
+.ant-menu-submenu-title i.far {
+  font-size: 16px !important;
+  margin-right: 12px !important;
+  flex-shrink: 0;
+  display: inline-flex !important;
+  align-items: center !important;
+  vertical-align: middle !important;
+  width: 20px !important;
+  height: 20px !important;
+  justify-content: center !important;
+  line-height: 20px !important;
+}
+
+/* Submenu Arrow Alignment */
+.ant-menu-submenu-expand-icon {
+  margin-left: auto !important;
+  margin-right: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  vertical-align: middle !important;
+  height: 48px !important;
+  line-height: 48px !important;
+  margin-top: 0 !important;
+  transform: translateY(-24px) !important;
+}
+
+.ant-menu-submenu-expand-icon .anticon {
+  font-size: 12px !important;
+  margin: 0 !important;
+  vertical-align: middle !important;
 }
 
 /* ===== HEADER STYLING ===== */

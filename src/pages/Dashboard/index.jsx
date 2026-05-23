@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Row, Col, Statistic, Table, Tag, Spin, Button, List, Dropdown, Menu } from 'antd';
+import { Card, Row, Col, Statistic, Table, Tag, Spin, Button, List, Dropdown, Menu, Select, DatePicker } from 'antd';
 import { useStore } from '../../contexts/StoreContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { database } from '../../services/firebase.service';
@@ -22,10 +22,15 @@ import {
   EditOutlined,
   DeleteOutlined,
   PrinterOutlined,
-  MoreOutlined
+  MoreOutlined,
+  RiseOutlined,
+  FallOutlined,
+  WarningOutlined
 } from '@ant-design/icons';
 import { formatCurrency } from '../../utils/format';
 import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from '../../utils/constants';
+import { LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import dayjs from 'dayjs';
 
 const Dashboard = () => {
   const { selectedStore } = useStore();
@@ -33,21 +38,45 @@ const Dashboard = () => {
   const { user, isAdmin } = useAuth();
   const hasPermission = isAdmin || (user?.permissions || []).includes('dashboard.view');
   const [loading, setLoading] = useState(true);
+  const [timeRange, setTimeRange] = useState('7days');
   const [stats, setStats] = useState({
     totalOrders: 0,
     totalProducts: 0,
     totalRevenue: 0,
-    lowStockProducts: 0
+    lowStockProducts: 0,
+    ordersToday: 0,
+    totalInvoices: 0,
+    pendingOrders: 0
+  });
+  const [trends, setTrends] = useState({
+    ordersTrend: 0,
+    revenueTrend: 0,
+    productsTrend: 0
   });
   const [recentOrders, setRecentOrders] = useState([]);
+  const [revenueData, setRevenueData] = useState([]);
+  const [orderStatusData, setOrderStatusData] = useState([]);
+  const [topProducts, setTopProducts] = useState([]);
+  const [lowStockItems, setLowStockItems] = useState([]);
+  const [productRevenueData, setProductRevenueData] = useState([]);
+  const [storeRevenueData, setStoreRevenueData] = useState([]);
+  const [hourlyRevenueData, setHourlyRevenueData] = useState([]);
+  const [purchaseTrendsData, setPurchaseTrendsData] = useState([]);
+  const [inventoryStats, setInventoryStats] = useState([]);
+  const [slowMovingProducts, setSlowMovingProducts] = useState([]);
+  const [orderTypeRevenue, setOrderTypeRevenue] = useState([]);
+  const [withdrawalHistory, setWithdrawalHistory] = useState([]);
 
   useEffect(() => {
     loadDashboardData();
-  }, [selectedStore]);
+  }, [selectedStore, timeRange]);
 
   const loadDashboardData = async () => {
     try {
       setLoading(true);
+      
+      // Calculate days based on timeRange
+      const days = timeRange === '7days' ? 7 : timeRange === '30days' ? 30 : 90;
       
       // Load orders from Firebase
       const ordersRef = ref(database, 'salesOrders');
@@ -78,25 +107,121 @@ const Dashboard = () => {
           
           // Tính toán thống kê
           const totalRevenue = orders
-            .filter(order => order.status === 'completed')
             .reduce((sum, order) => sum + (order.totalAmount || 0), 0);
 
           const lowStockProducts = products.filter(p => (p.stock || 0) <= 10).length;
-
-          setStats({
-            totalOrders: orders.length,
-            totalProducts: products.length,
-            totalRevenue,
-            lowStockProducts
-          });
-
-          // Lấy 10 đơn hàng gần nhất
-          const sortedOrders = orders
-            .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-            .slice(0, 10);
-          setRecentOrders(sortedOrders);
           
-          setLoading(false);
+          // Calculate orders today
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const ordersToday = orders.filter(order => {
+            const orderDate = new Date(order.createdAt);
+            orderDate.setHours(0, 0, 0, 0);
+            return orderDate.getTime() === today.getTime();
+          }).length;
+          
+          // Calculate pending orders
+          const pendingOrders = orders.filter(order => order.status === 'pending').length;
+          
+          // Calculate trends (compare with previous period)
+          const previousPeriodStart = new Date();
+          previousPeriodStart.setDate(previousPeriodStart.getDate() - (days * 2));
+          const previousPeriodEnd = new Date();
+          previousPeriodEnd.setDate(previousPeriodEnd.getDate() - days);
+          
+          const previousOrders = orders.filter(order => {
+            const orderDate = new Date(order.createdAt);
+            return orderDate >= previousPeriodStart && orderDate < previousPeriodEnd;
+          });
+          
+          const previousRevenue = previousOrders
+            .reduce((sum, order) => sum + (order.totalAmount || 0), 0);
+          
+          const ordersTrend = previousOrders.length > 0 
+            ? ((orders.length - previousOrders.length) / previousOrders.length * 100).toFixed(1)
+            : 0;
+          const revenueTrend = previousRevenue > 0 
+            ? ((totalRevenue - previousRevenue) / previousRevenue * 100).toFixed(1)
+            : 0;
+          
+          // Load invoices
+          const invoicesRef = ref(database, 'paymentInvoices');
+          onValue(invoicesRef, (invSnapshot) => {
+            const invoicesData = invSnapshot.val();
+            let invoicesArray = [];
+            
+            if (invoicesData) {
+              invoicesArray = Object.keys(invoicesData).map(key => ({
+                id: key,
+                ...invoicesData[key]
+              }));
+              
+              // Filter by store if not 'all'
+              if (selectedStore && selectedStore.id !== 'all') {
+                invoicesArray = invoicesArray.filter(invoice => invoice.storeName === selectedStore.name);
+              }
+            }
+            
+            const invoices = invoicesArray.length;
+
+            setStats({
+              totalOrders: orders.length,
+              totalProducts: products.length,
+              totalRevenue,
+              lowStockProducts,
+              ordersToday,
+              totalInvoices: invoices,
+              pendingOrders
+            });
+
+            setTrends({
+              ordersTrend: parseFloat(ordersTrend),
+              revenueTrend: parseFloat(revenueTrend),
+              productsTrend: 0
+            });
+
+            // Calculate revenue trend data
+            calculateRevenueTrend(orders);
+            
+            // Calculate order status distribution
+            calculateOrderStatusDistribution(orders);
+            
+            // Calculate top products
+            calculateTopProducts(orders);
+            
+            // Calculate revenue by product
+            calculateProductRevenue(orders);
+            
+            // Calculate revenue by store
+            calculateStoreRevenue(orders);
+            
+            // Calculate hourly revenue (real-time)
+            calculateHourlyRevenue(orders);
+            
+            // Calculate purchase trends
+            calculatePurchaseTrends(orders);
+            
+            // Calculate inventory stats
+            calculateInventoryStats(products, orders);
+            
+            // Calculate revenue by order type
+            calculateOrderTypeRevenue(orders);
+            
+            // Load withdrawal history
+            loadWithdrawalHistory();
+            
+            // Get low stock items
+            const lowStockItems = products.filter(p => (p.stock || 0) <= 10).slice(0, 5);
+            setLowStockItems(lowStockItems);
+
+            // Lấy 10 đơn hàng gần nhất
+            const sortedOrders = orders
+              .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+              .slice(0, 10);
+            setRecentOrders(sortedOrders);
+            
+            setLoading(false);
+          }, { onlyOnce: true });
         }, { onlyOnce: true });
       }, { onlyOnce: true });
     } catch (error) {
@@ -104,6 +229,256 @@ const Dashboard = () => {
       setLoading(false);
     }
   };
+
+  const calculateRevenueTrend = (orders) => {
+    const days = timeRange === '7days' ? 7 : timeRange === '30days' ? 30 : 90;
+    const data = [];
+    
+    for (let i = days - 1; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      date.setHours(0, 0, 0, 0);
+      
+      const nextDate = new Date(date);
+      nextDate.setDate(nextDate.getDate() + 1);
+      
+      const dayRevenue = orders
+        .filter(order => {
+          const orderDate = new Date(order.createdAt);
+          return orderDate >= date && orderDate < nextDate;
+        })
+        .reduce((sum, order) => sum + (order.totalAmount || 0), 0);
+      
+      data.push({
+        date: date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' }),
+        revenue: dayRevenue
+      });
+    }
+    
+    setRevenueData(data);
+  };
+
+  const calculateOrderStatusDistribution = (orders) => {
+    const statusCounts = {};
+    orders.forEach(order => {
+      const status = order.status || 'unknown';
+      statusCounts[status] = (statusCounts[status] || 0) + 1;
+    });
+    
+    // Additional Vietnamese labels for status values not in constants
+    const additionalLabels = {
+      'pending': 'Chờ xác nhận',
+      'confirmed': 'Đã xác nhận',
+      'processing': 'Đang xử lý',
+      'shipping': 'Đang giao',
+      'completed': 'Hoàn thành',
+      'cancelled': 'Đã hủy',
+      'returned': 'Trả hàng',
+      'delivered': 'Đã giao',
+      'unknown': 'Không xác định'
+    };
+    
+    const data = Object.keys(statusCounts).map(status => ({
+      name: ORDER_STATUS_LABELS[status] || additionalLabels[status] || status,
+      value: statusCounts[status],
+      color: ORDER_STATUS_COLORS[status] || '#gray'
+    }));
+    
+    setOrderStatusData(data);
+  };
+
+  const calculateTopProducts = (orders) => {
+    const productSales = {};
+    
+    orders.forEach(order => {
+      if (order.items && Array.isArray(order.items)) {
+        order.items.forEach(item => {
+          const productName = item.productName || 'Unknown';
+          productSales[productName] = (productSales[productName] || 0) + (item.quantity || 0);
+        });
+      }
+    });
+    
+    const sortedProducts = Object.keys(productSales)
+      .map(name => ({
+        name,
+        sales: productSales[name]
+      }))
+      .sort((a, b) => b.sales - a.sales)
+      .slice(0, 5);
+    
+    setTopProducts(sortedProducts);
+  };
+
+  const calculateProductRevenue = (orders) => {
+    const productRevenue = {};
+    
+    orders.forEach(order => {
+      if (order.items && Array.isArray(order.items)) {
+        order.items.forEach(item => {
+          const productName = item.productName || 'Unknown';
+          const itemRevenue = (item.sellingPrice || 0) * (item.quantity || 0);
+          productRevenue[productName] = (productRevenue[productName] || 0) + itemRevenue;
+        });
+      }
+    });
+    
+    const sortedProducts = Object.keys(productRevenue)
+      .map(name => ({
+        name,
+        revenue: productRevenue[name]
+      }))
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 10);
+    
+    setProductRevenueData(sortedProducts);
+  };
+
+  const calculateStoreRevenue = (orders) => {
+    const storeRevenue = {};
+    
+    orders.forEach(order => {
+      const storeName = order.storeName || 'Unknown';
+      storeRevenue[storeName] = (storeRevenue[storeName] || 0) + (order.totalAmount || 0);
+    });
+    
+    const sortedStores = Object.keys(storeRevenue)
+      .map(name => ({
+        name,
+        revenue: storeRevenue[name]
+      }))
+      .sort((a, b) => b.revenue - a.revenue);
+    
+    setStoreRevenueData(sortedStores);
+  };
+
+  const calculateHourlyRevenue = (orders) => {
+    const hourlyData = {};
+    
+    orders.forEach(order => {
+      const orderDate = new Date(order.createdAt);
+      const hour = orderDate.getHours();
+      const date = orderDate.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
+      const key = `${date} ${hour}:00`;
+      
+      hourlyData[key] = (hourlyData[key] || 0) + (order.totalAmount || 0);
+    });
+    
+    const sortedData = Object.keys(hourlyData)
+      .map(key => ({
+        time: key,
+        revenue: hourlyData[key]
+      }))
+      .slice(-24); // Last 24 hours
+    
+    setHourlyRevenueData(sortedData);
+  };
+
+  const calculatePurchaseTrends = (orders) => {
+    const dayOfWeekData = {};
+    const dayNames = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
+    
+    orders.forEach(order => {
+      const orderDate = new Date(order.createdAt);
+      const dayOfWeek = orderDate.getDay();
+      const dayName = dayNames[dayOfWeek];
+      
+      dayOfWeekData[dayName] = (dayOfWeekData[dayName] || 0) + 1;
+    });
+    
+    const data = dayNames.map(dayName => ({
+      day: dayName,
+      orders: dayOfWeekData[dayName] || 0
+    }));
+    
+    setPurchaseTrendsData(data);
+  };
+
+  const calculateInventoryStats = (products, orders) => {
+    // Calculate product sales from orders
+    const productSales = {};
+    orders.forEach(order => {
+      if (order.items && Array.isArray(order.items)) {
+        order.items.forEach(item => {
+          const productName = item.productName || 'Unknown';
+          productSales[productName] = (productSales[productName] || 0) + (item.quantity || 0);
+        });
+      }
+    });
+
+    // Calculate inventory turnover and identify top selling products
+    const inventoryData = products.map(product => {
+      const sales = productSales[product.name] || 0;
+      const stock = product.stock || 0;
+      const turnoverRate = stock > 0 ? (sales / stock) : 0;
+      
+      return {
+        name: product.name,
+        stock,
+        sales,
+        turnoverRate: turnoverRate.toFixed(2),
+        status: stock <= 10 ? 'Sắp hết' : sales > 0 ? 'Bán chạy' : 'Bán chậm'
+      };
+    });
+
+    // Sort by sales (descending - from most sold to least sold)
+    const sortedInventory = inventoryData.sort((a, b) => b.sales - a.sales);
+
+    // Sort by sales (descending for top selling)
+    const topSelling = inventoryData
+      .filter(p => p.status === 'Bán chạy')
+      .sort((a, b) => b.sales - a.sales)
+      .slice(0, 5);
+
+    setSlowMovingProducts(topSelling);
+    setInventoryStats(sortedInventory);
+  };
+
+  const calculateOrderTypeRevenue = (orders) => {
+    const orderTypeData = {
+      retail: { name: 'Bán Lẻ', revenue: 0, orders: 0 },
+      wholesale: { name: 'Bán Sỉ', revenue: 0, orders: 0 },
+      ecommerce: { name: 'TMĐT', revenue: 0, orders: 0 }
+    };
+
+    orders.forEach(order => {
+      const type = order.orderType || 'retail';
+      if (orderTypeData[type]) {
+        orderTypeData[type].revenue += (order.totalAmount || 0);
+        orderTypeData[type].orders += 1;
+      }
+    });
+
+    const data = Object.keys(orderTypeData).map(key => orderTypeData[key]);
+    setOrderTypeRevenue(data);
+  };
+
+  const loadWithdrawalHistory = () => {
+    if (!user) return;
+    
+    const withdrawalsRef = ref(database, `withdrawals/${user.uid}`);
+    onValue(withdrawalsRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const withdrawalsList = Object.keys(data).map(key => ({
+          id: key,
+          ...data[key]
+        })).sort((a, b) => new Date(b.date) - new Date(a.date));
+        
+        // Filter by selected store
+        let filteredWithdrawals = withdrawalsList;
+        if (selectedStore && selectedStore.id !== 'all') {
+          filteredWithdrawals = withdrawalsList.filter(w => w.storeName === selectedStore.name);
+        }
+        
+        setWithdrawalHistory(filteredWithdrawals);
+      } else {
+        setWithdrawalHistory([]);
+      }
+    }, { onlyOnce: true });
+  };
+
+  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
 
   const columns = [
     {
@@ -165,14 +540,26 @@ const Dashboard = () => {
     <div style={{ width: '100%', maxWidth: '100%' }}>
       {/* Header Section */}
       <div style={{ marginBottom: 32 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: 8 }}>
-          <DashboardOutlined style={{ fontSize: '32px', color: '#007A33' }} />
-          <h1 className="page-title" style={{ margin: 0, color: '#007A33' }}>Dashboard</h1>
-          {selectedStore && (
-            <Tag color={selectedStore.id === 'all' ? 'blue' : 'green'} style={{ fontSize: '14px', padding: '4px 12px' }}>
-              {selectedStore.id === 'all' ? '🏪 Toàn Bộ Cửa Hàng' : `📍 ${selectedStore.name}`}
-            </Tag>
-          )}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <DashboardOutlined style={{ fontSize: '32px', color: '#007A33' }} />
+            <h1 className="page-title" style={{ margin: 0, color: '#007A33' }}>Dashboard</h1>
+            {selectedStore && (
+              <Tag color={selectedStore.id === 'all' ? 'blue' : 'green'} style={{ fontSize: '14px', padding: '4px 12px' }}>
+                {selectedStore.id === 'all' ? '🏪 Toàn Bộ Cửa Hàng' : `📍 ${selectedStore.name}`}
+              </Tag>
+            )}
+          </div>
+          <Select
+            value={timeRange}
+            onChange={setTimeRange}
+            style={{ width: 150 }}
+            options={[
+              { value: '7days', label: '7 ngày' },
+              { value: '30days', label: '30 ngày' },
+              { value: '90days', label: '90 ngày' }
+            ]}
+          />
         </div>
         <p style={{ margin: 0, color: '#666', fontSize: '14px', paddingLeft: '44px' }}>
           {selectedStore && selectedStore.id === 'all' 
@@ -200,6 +587,16 @@ const Dashboard = () => {
               <div>
                 <div style={{ fontSize: '28px', fontWeight: '700', color: '#333', lineHeight: 1 }}>{stats.totalOrders}</div>
                 <div style={{ fontSize: '13px', color: '#999', marginTop: '4px' }}>Tổng Đơn Hàng</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
+                  {trends.ordersTrend >= 0 ? (
+                    <RiseOutlined style={{ fontSize: '12px', color: '#52c41a' }} />
+                  ) : (
+                    <FallOutlined style={{ fontSize: '12px', color: '#ff4d4f' }} />
+                  )}
+                  <span style={{ fontSize: '12px', color: trends.ordersTrend >= 0 ? '#52c41a' : '#ff4d4f' }}>
+                    {Math.abs(trends.ordersTrend)}%
+                  </span>
+                </div>
               </div>
             </div>
           </Card>
@@ -221,6 +618,16 @@ const Dashboard = () => {
               <div>
                 <div style={{ fontSize: '20px', fontWeight: '700', color: '#333', lineHeight: 1 }}>{formatCurrency(stats.totalRevenue)}</div>
                 <div style={{ fontSize: '13px', color: '#999', marginTop: '4px' }}>Tổng Doanh Thu</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
+                  {trends.revenueTrend >= 0 ? (
+                    <RiseOutlined style={{ fontSize: '12px', color: '#52c41a' }} />
+                  ) : (
+                    <FallOutlined style={{ fontSize: '12px', color: '#ff4d4f' }} />
+                  )}
+                  <span style={{ fontSize: '12px', color: trends.revenueTrend >= 0 ? '#52c41a' : '#ff4d4f' }}>
+                    {Math.abs(trends.revenueTrend)}%
+                  </span>
+                </div>
               </div>
             </div>
           </Card>
@@ -261,10 +668,376 @@ const Dashboard = () => {
                 <InboxOutlined style={{ fontSize: '28px', color: 'white' }} />
               </div>
               <div>
-                <div style={{ fontSize: '28px', fontWeight: '700', color: '#333', lineHeight: 1 }}>{stats.lowStockProducts}</div>
-                <div style={{ fontSize: '13px', color: '#999', marginTop: '4px' }}>Đơn Hàng Nhận Nay</div>
+                <div style={{ fontSize: '28px', fontWeight: '700', color: '#333', lineHeight: 1 }}>{stats.ordersToday}</div>
+                <div style={{ fontSize: '13px', color: '#999', marginTop: '4px' }}>Đơn Hàng Hôm Nay</div>
               </div>
             </div>
+          </Card>
+        </Col>
+      </Row>
+
+      {/* Additional Stats */}
+      <Row gutter={[16, 16]} style={{ marginBottom: 32, width: '100%' }}>
+        <Col xs={24} sm={12} lg={8}>
+          <Card hoverable style={{ background: 'white', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', border: 'none' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <div style={{ 
+                width: '48px', 
+                height: '48px', 
+                background: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)', 
+                borderRadius: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <FileTextOutlined style={{ fontSize: '24px', color: 'white' }} />
+              </div>
+              <div>
+                <div style={{ fontSize: '24px', fontWeight: '700', color: '#333', lineHeight: 1 }}>{stats.totalInvoices}</div>
+                <div style={{ fontSize: '13px', color: '#999', marginTop: '4px' }}>Tổng Hóa Đơn</div>
+              </div>
+            </div>
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} lg={8}>
+          <Card hoverable style={{ background: 'white', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', border: 'none' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <div style={{ 
+                width: '48px', 
+                height: '48px', 
+                background: 'linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)', 
+                borderRadius: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <FileTextOutlined style={{ fontSize: '24px', color: 'white' }} />
+              </div>
+              <div>
+                <div style={{ fontSize: '24px', fontWeight: '700', color: '#333', lineHeight: 1 }}>{stats.pendingOrders}</div>
+                <div style={{ fontSize: '13px', color: '#999', marginTop: '4px' }}>Đơn Chờ Xử Lý</div>
+              </div>
+            </div>
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} lg={8}>
+          <Card hoverable style={{ background: 'white', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', border: 'none' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <div style={{ 
+                width: '48px', 
+                height: '48px', 
+                background: 'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)', 
+                borderRadius: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <WarningOutlined style={{ fontSize: '24px', color: 'white' }} />
+              </div>
+              <div>
+                <div style={{ fontSize: '24px', fontWeight: '700', color: '#333', lineHeight: 1 }}>{stats.lowStockProducts}</div>
+                <div style={{ fontSize: '13px', color: '#999', marginTop: '4px' }}>Sản Phẩm Sắp Hết</div>
+              </div>
+            </div>
+          </Card>
+        </Col>
+      </Row>
+
+      {/* Charts Section */}
+      <Row gutter={[16, 16]} style={{ marginBottom: 32, width: '100%' }}>
+        <Col xs={24} lg={16}>
+          <Card 
+            title={<span style={{ fontSize: '16px', fontWeight: '600' }}>📈 Biểu đồ Doanh Thu</span>}
+            style={{ background: 'white', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', border: 'none' }}
+          >
+            <ResponsiveContainer width="100%" height={300}>
+              <AreaChart data={revenueData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="date" label={{ value: 'Ngày', position: 'insideBottomRight', offset: -5 }} />
+                <YAxis tickFormatter={(value) => `${(value / 1000000).toFixed(0)}M`} label={{ value: 'Doanh thu (triệu VNĐ)', angle: -90, position: 'insideLeft' }} />
+                <Tooltip formatter={(value) => formatCurrency(value)} />
+                <Area type="monotone" dataKey="revenue" stroke="#007A33" fill="#007A33" fillOpacity={0.3} name="Doanh thu" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </Card>
+        </Col>
+        <Col xs={24} lg={8}>
+          <Card 
+            title={<span style={{ fontSize: '16px', fontWeight: '600' }}>📊 Trạng Thái Đơn Hàng</span>}
+            style={{ background: 'white', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', border: 'none' }}
+          >
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={orderStatusData}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                  outerRadius={80}
+                  fill="#8884d8"
+                  dataKey="value"
+                  name="Số lượng"
+                >
+                  {orderStatusData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color || COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(value) => `${value} đơn`} />
+              </PieChart>
+            </ResponsiveContainer>
+          </Card>
+        </Col>
+      </Row>
+
+      {/* Top Products and Low Stock */}
+      <Row gutter={[16, 16]} style={{ marginBottom: 32, width: '100%' }}>
+        <Col xs={24} lg={12}>
+          <Card 
+            title={<span style={{ fontSize: '16px', fontWeight: '600' }}>🏆 Top 5 Sản Phẩm Bán Chạy</span>}
+            style={{ background: 'white', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', border: 'none' }}
+          >
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={topProducts}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" label={{ value: 'Sản phẩm', position: 'insideBottomRight', offset: -5 }} />
+                <YAxis label={{ value: 'Số lượng', angle: -90, position: 'insideLeft' }} />
+                <Tooltip />
+                <Bar dataKey="sales" fill="#007A33" name="Số lượng bán" />
+              </BarChart>
+            </ResponsiveContainer>
+          </Card>
+        </Col>
+        <Col xs={24} lg={12}>
+          <Card 
+            title={<span style={{ fontSize: '16px', fontWeight: '600' }}>⚠️ Cảnh Báo Hàng Tồn Kho Thấp</span>}
+            style={{ background: 'white', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', border: 'none' }}
+          >
+            <List
+              dataSource={lowStockItems}
+              locale={{ emptyText: 'Không có sản phẩm sắp hết hàng' }}
+              renderItem={(item) => (
+                <List.Item>
+                  <List.Item.Meta
+                    title={item.name}
+                    description={`Tồn kho: ${item.stock || 0} ${item.unit || 'kg'}`}
+                  />
+                  <Tag color="red" style={{ fontSize: '12px' }}>Sắp hết</Tag>
+                </List.Item>
+              )}
+            />
+          </Card>
+        </Col>
+      </Row>
+
+      {/* Revenue by Product and Store */}
+      <Row gutter={[16, 16]} style={{ marginBottom: 32, width: '100%' }}>
+        <Col xs={24} lg={12}>
+          <Card 
+            title={<span style={{ fontSize: '16px', fontWeight: '600' }}>💰 Doanh Thu Theo Sản Phẩm</span>}
+            style={{ background: 'white', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', border: 'none' }}
+          >
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={productRevenueData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" label={{ value: 'Sản phẩm', position: 'insideBottomRight', offset: -5 }} />
+                <YAxis tickFormatter={(value) => `${(value / 1000000).toFixed(0)}M`} label={{ value: 'Doanh thu (triệu VNĐ)', angle: -90, position: 'insideLeft' }} />
+                <Tooltip formatter={(value) => formatCurrency(value)} />
+                <Bar dataKey="revenue" fill="#f5576c" name="Doanh thu" />
+              </BarChart>
+            </ResponsiveContainer>
+          </Card>
+        </Col>
+        <Col xs={24} lg={12}>
+          <Card 
+            title={<span style={{ fontSize: '16px', fontWeight: '600' }}>🏪 Doanh Thu Theo Cửa Hàng</span>}
+            style={{ background: 'white', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', border: 'none' }}
+          >
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={storeRevenueData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" label={{ value: 'Cửa hàng', position: 'insideBottomRight', offset: -5 }} />
+                <YAxis tickFormatter={(value) => `${(value / 1000000).toFixed(0)}M`} label={{ value: 'Doanh thu (triệu VNĐ)', angle: -90, position: 'insideLeft' }} />
+                <Tooltip formatter={(value) => formatCurrency(value)} />
+                <Bar dataKey="revenue" fill="#1890ff" name="Doanh thu" />
+              </BarChart>
+            </ResponsiveContainer>
+          </Card>
+        </Col>
+      </Row>
+
+      {/* Real-time and Purchase Trends */}
+      <Row gutter={[16, 16]} style={{ marginBottom: 32, width: '100%' }}>
+        <Col xs={24} lg={12}>
+          <Card 
+            title={<span style={{ fontSize: '16px', fontWeight: '600' }}>⏰ Doanh Thu Theo Giờ (24h)</span>}
+            style={{ background: 'white', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', border: 'none' }}
+          >
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={hourlyRevenueData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="time" label={{ value: 'Thời gian', position: 'insideBottomRight', offset: -5 }} />
+                <YAxis tickFormatter={(value) => `${(value / 1000000).toFixed(0)}M`} label={{ value: 'Doanh thu (triệu VNĐ)', angle: -90, position: 'insideLeft' }} />
+                <Tooltip formatter={(value) => formatCurrency(value)} />
+                <Line type="monotone" dataKey="revenue" stroke="#faad14" strokeWidth={2} name="Doanh thu" />
+              </LineChart>
+            </ResponsiveContainer>
+          </Card>
+        </Col>
+        <Col xs={24} lg={12}>
+          <Card 
+            title={<span style={{ fontSize: '16px', fontWeight: '600' }}>📅 Xu Hướng Mua Hàng Theo Ngày</span>}
+            style={{ background: 'white', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', border: 'none' }}
+          >
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={purchaseTrendsData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="day" label={{ value: 'Ngày trong tuần', position: 'insideBottomRight', offset: -5 }} />
+                <YAxis label={{ value: 'Số đơn hàng', angle: -90, position: 'insideLeft' }} />
+                <Tooltip />
+                <Bar dataKey="orders" fill="#13c2c2" name="Số đơn hàng" />
+              </BarChart>
+            </ResponsiveContainer>
+          </Card>
+        </Col>
+      </Row>
+
+      {/* Inventory Report */}
+      <Row gutter={[16, 16]} style={{ marginBottom: 32, width: '100%' }}>
+        <Col xs={24} lg={12}>
+          <Card 
+            title={<span style={{ fontSize: '16px', fontWeight: '600' }}>📦 Báo Cáo Hàng Tồn Kho</span>}
+            style={{ background: 'white', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', border: 'none' }}
+          >
+            <Table
+              dataSource={inventoryStats}
+              pagination={{
+                pageSize: 10,
+                showSizeChanger: true,
+                pageSizeOptions: ['10', '20', '50']
+              }}
+              size="small"
+              columns={[
+                {
+                  title: 'Sản Phẩm',
+                  dataIndex: 'name',
+                  key: 'name',
+                  width: '40%'
+                },
+                {
+                  title: 'Tồn Kho',
+                  dataIndex: 'stock',
+                  key: 'stock',
+                  width: '20%'
+                },
+                {
+                  title: 'Đã Bán',
+                  dataIndex: 'sales',
+                  key: 'sales',
+                  width: '20%'
+                },
+                {
+                  title: 'Tỷ Lệ Xoay',
+                  dataIndex: 'turnoverRate',
+                  key: 'turnoverRate',
+                  width: '20%'
+                }
+              ]}
+            />
+          </Card>
+        </Col>
+        <Col xs={24} lg={12}>
+          <Card 
+            title={<span style={{ fontSize: '16px', fontWeight: '600' }}>🏆 Sản Phẩm Được Bán Nhiều</span>}
+            style={{ background: 'white', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', border: 'none' }}
+          >
+            <List
+              dataSource={slowMovingProducts}
+              locale={{ emptyText: 'Không có sản phẩm bán chạy' }}
+              renderItem={(item) => (
+                <List.Item>
+                  <List.Item.Meta
+                    title={item.name}
+                    description={`Tồn kho: ${item.stock} | Đã bán: ${item.sales}`}
+                  />
+                  <Tag color="green" style={{ fontSize: '12px' }}>Bán chạy</Tag>
+                </List.Item>
+              )}
+            />
+          </Card>
+        </Col>
+      </Row>
+
+      {/* Revenue by Order Type and Withdrawal History */}
+      <Row gutter={[16, 16]} style={{ marginBottom: 32, width: '100%' }}>
+        <Col xs={24} lg={12}>
+          <Card 
+            title={<span style={{ fontSize: '16px', fontWeight: '600' }}>📊 Doanh Thu Theo Loại Đơn</span>}
+            style={{ background: 'white', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', border: 'none' }}
+          >
+            <Table
+              dataSource={orderTypeRevenue}
+              pagination={false}
+              size="small"
+              columns={[
+                {
+                  title: 'Loại Đơn',
+                  dataIndex: 'name',
+                  key: 'name',
+                  width: '33%'
+                },
+                {
+                  title: 'Số Đơn',
+                  dataIndex: 'orders',
+                  key: 'orders',
+                  width: '33%'
+                },
+                {
+                  title: 'Doanh Thu',
+                  dataIndex: 'revenue',
+                  key: 'revenue',
+                  width: '33%',
+                  render: (value) => formatCurrency(value)
+                }
+              ]}
+            />
+          </Card>
+        </Col>
+        <Col xs={24} lg={12}>
+          <Card 
+            title={<span style={{ fontSize: '16px', fontWeight: '600' }}>💸 Lịch Sử Rút Tiền</span>}
+            style={{ background: 'white', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', border: 'none' }}
+          >
+            <Table
+              dataSource={withdrawalHistory}
+              pagination={{
+                pageSize: 3,
+                showSizeChanger: false
+              }}
+              size="small"
+              columns={[
+                {
+                  title: 'Người Rút',
+                  dataIndex: 'person',
+                  key: 'person',
+                  width: '30%'
+                },
+                {
+                  title: 'Số Tiền',
+                  dataIndex: 'amount',
+                  key: 'amount',
+                  width: '30%',
+                  render: (value) => formatCurrency(value)
+                },
+                {
+                  title: 'Ngày',
+                  dataIndex: 'date',
+                  key: 'date',
+                  width: '40%',
+                  render: (date) => dayjs(date).format('DD/MM/YYYY')
+                }
+              ]}
+            />
           </Card>
         </Col>
       </Row>

@@ -611,7 +611,7 @@ const MainLayout = () => {
           top: 0,
           bottom: 0,
           zIndex: 1000,
-          background: 'linear-gradient(135deg, #007A33 0%, #005A28 100%)',
+          background: 'rgb(74 212 158)',
         }}
       >
         <div className="logo" style={{ 
