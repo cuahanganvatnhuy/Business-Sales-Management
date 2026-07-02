@@ -42,7 +42,7 @@ import { validateStock, deductStock, checkStockAvailability } from '../../utils/
 import { calculateOrderProfit } from '../../utils/profitCalculator';
 import dayjs from 'dayjs';
 import { useAuth } from '../../contexts/AuthContext';
-import './Orders.css';
+import './Orders.css'; 
 
 const { Option } = Select;
 

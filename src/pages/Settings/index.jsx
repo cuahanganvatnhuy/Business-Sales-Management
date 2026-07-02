@@ -294,6 +294,7 @@ const Settings = () => {
       title: 'Trạng thái',
       dataIndex: 'status',
       key: 'status',
+
       render: (status) => {
         const color = status === 'active' ? 'green' : status === 'inactive' ? 'red' : 'orange';
         const text = status === 'active' ? 'Hoạt động' : status === 'inactive' ? 'Không hoạt động' : 'Tạm khóa';
